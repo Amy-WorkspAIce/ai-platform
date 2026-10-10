@@ -79,11 +79,26 @@ def _mount_frontend(app: FastAPI, settings: Settings) -> None:
         return
 
     if (static / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=static / "assets"), name="assets")
+        app.mount("/assets", ImmutableStaticFiles(directory=static / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str) -> FileResponse:
         candidate = (static / path).resolve()
         if path and candidate.is_file() and candidate.is_relative_to(static.resolve()):
-            return FileResponse(candidate)
-        return FileResponse(index)
+            return FileResponse(candidate, headers=NO_CACHE)
+        # index.html must always be revalidated: it names the current hashed bundles, and a
+        # cached copy would keep showing the old UI after the container is updated.
+        return FileResponse(index, headers=NO_CACHE)
+
+
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+class ImmutableStaticFiles(StaticFiles):
+    """Vite bundles have content hashes in their names, so they can be cached forever."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response

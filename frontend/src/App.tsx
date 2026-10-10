@@ -18,6 +18,14 @@ export function App() {
   // mid-stream (getting an id) isn't remounted.
   const [chat, setChat] = useState<{ key: number; id: string | null }>({ key: 0, id: null });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    fetch("/health")
+      .then((r) => r.json())
+      .then((h) => setVersion(h.version ?? ""))
+      .catch(() => {});
+  }, []);
 
   const logout = useCallback(() => {
     setApiKey("");
@@ -145,6 +153,7 @@ export function App() {
           <button className="link" onClick={logout}>
             Change API key
           </button>
+          {version && <span className="version">v{version}</span>}
         </div>
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}

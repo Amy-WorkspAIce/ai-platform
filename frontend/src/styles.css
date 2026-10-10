@@ -271,3 +271,5 @@ a.button.secondary { background: var(--surface-2); }
 .speed { display: flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.9rem; }
 .audio-result { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .audio-result audio { flex: 1; min-width: 220px; }
+.sidebar-footer { display: flex; justify-content: space-between; align-items: center; }
+.version { font-size: 0.75rem; color: var(--muted); padding-right: 0.25rem; }
