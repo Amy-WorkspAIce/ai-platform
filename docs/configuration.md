@@ -1,0 +1,38 @@
+# Configuration
+
+All settings are environment variables. None are required.
+
+| Variable | Default | Description |
+|---|---|---|
+| `AMY_API_KEY` | *(auto)* | API key for `/v1` and `/api`. If unset, one is generated on first start, saved to `/data/secrets/api_key`, and printed to the logs. |
+| `AMY_OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama server. The default is the bundled one. Set to empty to disable the Ollama provider. |
+| `AMY_BUNDLED_OLLAMA` | `true` (full image) / `false` (slim) | Start the Ollama engine inside the container. |
+| `AMY_PROVIDERS` | `[]` | Extra OpenAI-compatible providers, as a JSON list of `{"name", "base_url", "api_key"?}`. `base_url` is the API root (usually ends in `/v1`). |
+| `AMY_CORS_ORIGINS` | *(none)* | Comma-separated browser origins allowed to call the API (for other apps' frontends). |
+| `AMY_UPSTREAM_TIMEOUT` | `600` | Seconds to wait on a model engine. |
+| `AMY_DATA_DIR` | `/data` | Persistent state directory. |
+| `AMY_PORT` | `8484` | Listen port inside the container. |
+| `PUID` / `PGID` | `1000` / `1000` | Owner of files in `/data`. Unraid uses `99` / `100`. |
+| `OLLAMA_MODELS` | `/data/ollama/models` | Where the bundled Ollama stores models. |
+| `NVIDIA_VISIBLE_DEVICES` | `all` | Which GPUs the bundled Ollama can use. |
+
+Any other `OLLAMA_*` variable (e.g. `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_PARALLEL`) is
+passed through to the bundled Ollama.
+
+## Examples
+
+**Use a vLLM server and OpenAI alongside bundled Ollama:**
+
+```env
+AMY_PROVIDERS=[{"name":"vllm","base_url":"http://192.168.1.20:8000/v1"},{"name":"openai","base_url":"https://api.openai.com/v1","api_key":"sk-..."}]
+```
+
+**Slim image + existing Ollama on the host:**
+
+```env
+AMY_OLLAMA_URL=http://host.docker.internal:11434
+```
+
+## Rotating the API key
+
+Set `AMY_API_KEY` to a new value, or delete `/data/secrets/api_key` and restart.

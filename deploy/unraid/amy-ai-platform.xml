@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>amy-ai-platform</Name>
+  <Repository>ghcr.io/amy-workspaice/ai-platform:latest</Repository>
+  <Registry>https://github.com/Amy-WorkspAIce/ai-platform/pkgs/container/ai-platform</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Amy-WorkspAIce/ai-platform/issues</Support>
+  <Project>https://github.com/Amy-WorkspAIce/ai-platform</Project>
+  <Overview>Amy AI Platform: a self-hosted, customizable AI platform. Runs local models on your NVIDIA GPU (bundled Ollama), exposes an OpenAI-compatible API for your other apps, and includes a web chat UI. Part of the open-source Amy WorkspAIce suite.&#xD;
+&#xD;
+GPU: requires the "Nvidia Driver" plugin. Without a GPU, remove "--runtime=nvidia" from Extra Parameters.&#xD;
+API key: printed in the container log on first start and saved to appdata/secrets/api_key.</Overview>
+  <Category>AI: Productivity: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8484]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Amy-WorkspAIce/ai-platform/main/deploy/unraid/amy-ai-platform.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Amy-WorkspAIce/ai-platform/main/deploy/unraid/icon.png</Icon>
+  <ExtraParams>--runtime=nvidia</ExtraParams>
+  <Config Name="WebUI / API Port" Target="8484" Default="8484" Mode="tcp" Description="Web UI and API port." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
+  <Config Name="Data" Target="/data" Default="/mnt/user/appdata/amy-ai-platform" Mode="rw" Description="All persistent data: settings, secrets, and downloaded models (models can be large; consider a cache/SSD pool)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/amy-ai-platform</Config>
+  <Config Name="API Key" Target="AMY_API_KEY" Default="" Mode="" Description="Optional. Leave blank to auto-generate on first start (see container log)." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="GPU UUID(s) from the Nvidia Driver plugin page, or 'all'." Type="Variable" Display="always" Required="false" Mask="false">all</Config>
+  <Config Name="Use Bundled Ollama" Target="AMY_BUNDLED_OLLAMA" Default="true|false" Mode="" Description="Run the built-in Ollama engine. Set false if you use an external Ollama server." Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <Config Name="Ollama URL" Target="AMY_OLLAMA_URL" Default="http://127.0.0.1:11434" Mode="" Description="Bundled Ollama by default. Point at another Ollama server if not bundled." Type="Variable" Display="advanced" Required="false" Mask="false">http://127.0.0.1:11434</Config>
+  <Config Name="Extra Providers (JSON)" Target="AMY_PROVIDERS" Default="" Mode="" Description='Optional OpenAI-compatible providers, e.g. [{"name":"vllm","base_url":"http://192.168.1.10:8000/v1"}]' Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="NVIDIA Driver Capabilities" Target="NVIDIA_DRIVER_CAPABILITIES" Default="compute,utility" Mode="" Description="" Type="Variable" Display="advanced" Required="false" Mask="false">compute,utility</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file ownership." Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file ownership." Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+</Container>

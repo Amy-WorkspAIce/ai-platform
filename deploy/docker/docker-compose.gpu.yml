@@ -1,0 +1,10 @@
+# NVIDIA GPU override. Requires the NVIDIA Container Toolkit on the host.
+services:
+  ai-platform:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

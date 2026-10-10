@@ -1,0 +1,19 @@
+# Amy AI Platform: plain Docker Compose.
+#
+#   docker compose up -d                                              # CPU
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d   # NVIDIA GPU
+#
+# Then open http://localhost:8484. The API key is printed in: docker compose logs ai-platform
+services:
+  ai-platform:
+    image: ghcr.io/amy-workspaice/ai-platform:latest
+    # build: ../..          # uncomment to build from this checkout instead
+    container_name: amy-ai-platform
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    volumes:
+      - ./data:/data
+    env_file:
+      - path: .env
+        required: false

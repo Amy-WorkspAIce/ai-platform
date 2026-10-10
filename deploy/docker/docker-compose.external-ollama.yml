@@ -1,0 +1,31 @@
+# Alternative layout: slim platform image + Ollama in its own container.
+# Cleaner for people who already run Ollama, or want to update it independently.
+#
+#   docker compose -f docker-compose.external-ollama.yml up -d
+services:
+  ai-platform:
+    image: ghcr.io/amy-workspaice/ai-platform:slim
+    container_name: amy-ai-platform
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    volumes:
+      - ./data:/data
+    environment:
+      AMY_OLLAMA_URL: http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: amy-ollama
+    restart: unless-stopped
+    volumes:
+      - ./ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
