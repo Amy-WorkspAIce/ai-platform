@@ -47,9 +47,14 @@ backend/            Python 3.11+ / FastAPI
   app/config.py     settings (AMY_* env vars)
   app/security.py   API key generation + bearer auth
   app/providers/    model providers (OpenAI-compatible, Ollama) + registry
-  app/api/          routers: system (/health, /api), openai (/v1)
+  app/hardware.py   GPU/RAM/disk detection (nvidia-smi, /proc/meminfo)
+  app/catalog/      curated model catalog (catalog.json), fit + recommendations
+  app/ollama_admin.py  install (background pulls + GPU warm-up), list, delete
+  app/api/          routers: system (/health, /api), models (/api), openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
+  src/views/        ChatView (chat), ModelsView (discovery + install)
+scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
 deploy/unraid/      Community Applications template
 deploy/docker/      compose files (CPU, GPU override, external Ollama)

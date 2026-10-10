@@ -9,12 +9,14 @@ All settings are environment variables. None are required.
 | `AMY_BUNDLED_OLLAMA` | `true` (full image) / `false` (slim) | Start the Ollama engine inside the container. |
 | `AMY_PROVIDERS` | `[]` | Extra OpenAI-compatible providers, as a JSON list of `{"name", "base_url", "api_key"?}`. `base_url` is the API root (usually ends in `/v1`). |
 | `AMY_CORS_ORIGINS` | *(none)* | Comma-separated browser origins allowed to call the API (for other apps' frontends). |
+| `AMY_GPU_VRAM_GB` | *(detected)* | Override detected GPU memory for model recommendations. Useful when Ollama runs on another machine (slim image) or the GPU isn't NVIDIA. |
 | `AMY_UPSTREAM_TIMEOUT` | `600` | Seconds to wait on a model engine. |
 | `AMY_DATA_DIR` | `/data` | Persistent state directory. |
 | `AMY_PORT` | `8484` | Listen port inside the container. |
 | `PUID` / `PGID` | `1000` / `1000` | Owner of files in `/data`. Unraid uses `99` / `100`. |
 | `OLLAMA_MODELS` | `/data/ollama/models` | Where the bundled Ollama stores models. |
 | `NVIDIA_VISIBLE_DEVICES` | `all` | Which GPUs the bundled Ollama can use. |
+| `CUDA_CACHE_PATH` / `CUDA_CACHE_MAXSIZE` | `/data/cache/cuda` / 4 GB | Persistent cache of compiled GPU kernels. Keeps the one-time first-run compile from repeating after restarts. |
 
 Any other `OLLAMA_*` variable (e.g. `OLLAMA_KEEP_ALIVE`, `OLLAMA_NUM_PARALLEL`) is
 passed through to the bundled Ollama.

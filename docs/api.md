@@ -24,5 +24,16 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/system` | Version and provider status. |
+| GET | `/api/hardware` | Detected GPUs (VRAM), RAM, CPU count, free disk in `/data`. |
+| GET | `/api/catalog` | Curated model catalog annotated with `fit`, `installed`, `needed_gb` per variant, plus `recommendations` per use case. |
+| GET | `/api/models/installed` | Models installed in Ollama. |
+| POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`. |
+| GET | `/api/models/pulls` | Progress of active and recent downloads (`status`, `completed`, `total`, `done`, `error`). |
+| DELETE | `/api/models/{model}` | Deletes an installed model. |
 
-Planned: provider CRUD, model pull/delete, API key management, connectors, conversations.
+After a download finishes, the platform loads the model once and generates a single
+token. On some GPUs, the first run compiles CUDA kernels, which can take minutes. Doing
+it during install means users don't wait on their first message. The status shows
+"Optimizing for your GPU (first run only)" while this happens.
+
+Planned: provider CRUD, API key management, connectors, conversations.

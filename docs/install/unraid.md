@@ -32,12 +32,12 @@
    Your API key (shown once): amy-XXXXXXXX
    ```
    It's also saved at `/mnt/user/appdata/amy-ai-platform/secrets/api_key`.
-2. Pull a model. Click the container icon → **Console**:
-   ```bash
-   ollama pull llama3.2
-   ```
-   *(Model management in the web UI is on the roadmap.)*
-3. Open the **WebUI** (`http://<server-ip>:8484`), paste the key, and chat.
+2. Open the **WebUI** (`http://<server-ip>:8484`) and paste the key.
+3. Go to **Models**. Amy shows your GPU and recommends models that fit it. Click
+   **Install** on one. The first install on a new GPU spends a few extra minutes on
+   "Optimizing for your GPU (first run only)" while CUDA compiles kernels for your card.
+   This happens once and is cached in appdata.
+4. Back in **Chat**, start talking.
 
 ## Verify the GPU is used
 
@@ -51,4 +51,5 @@ Unraid terminal.
 |---|---|
 | Container won't start: `unknown or invalid runtime name: nvidia` | Install the Nvidia Driver plugin, or remove `--runtime=nvidia`. |
 | Models run on CPU | Check `NVIDIA_VISIBLE_DEVICES`. Make sure no other container is holding all the VRAM. |
+| First message after a fresh install takes minutes | A one-time CUDA compile. Installs through the Models page do it up front. Models pulled from the console will do it on first use. |
 | Permission errors in appdata | Check PUID/PGID (99/100), then run `chown -R 99:100 /mnt/user/appdata/amy-ai-platform`. |

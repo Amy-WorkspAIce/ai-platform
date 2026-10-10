@@ -39,6 +39,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     AMY_DATA_DIR=/data AMY_STATIC_DIR=/app/static AMY_BUNDLED_OLLAMA=true \
     OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS=/data/ollama/models \
     NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    CUDA_CACHE_PATH=/data/cache/cuda CUDA_CACHE_MAXSIZE=4294967296 \
     PATH=/opt/venv/bin:$PATH
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv \

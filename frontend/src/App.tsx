@@ -1,24 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AuthError, getApiKey, listModels, setApiKey, streamChat, type ChatMessage } from "./api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Api, AuthError, getApiKey, setApiKey } from "./api";
+import { ChatView } from "./views/ChatView";
+import { ModelsView } from "./views/ModelsView";
+
+type View = "chat" | "models";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
+  const api = useMemo(() => new Api(key), [key]);
   const [models, setModels] = useState<string[] | null>(null);
   const [error, setError] = useState("");
+  const [view, setView] = useState<View>("chat");
+  const [chatId, setChatId] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const loadModels = useCallback(async (k: string) => {
-    setError("");
-    try {
-      setModels(await listModels(k));
-    } catch (e) {
-      if (e instanceof AuthError) setKey("");
-      setError(String(e instanceof Error ? e.message : e));
-    }
+  const logout = useCallback(() => {
+    setApiKey("");
+    setKey("");
+    setModels(null);
   }, []);
 
+  const refreshModels = useCallback(async () => {
+    try {
+      setModels(await api.listModels());
+      setError("");
+    } catch (e) {
+      if (e instanceof AuthError) logout();
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [api, logout]);
+
   useEffect(() => {
-    if (key) void loadModels(key);
-  }, [key, loadModels]);
+    if (key) void refreshModels();
+  }, [key, refreshModels]);
 
   if (!key) {
     return (
@@ -32,22 +46,57 @@ export function App() {
     );
   }
 
+  const go = (v: View) => {
+    setView(v);
+    setMenuOpen(false);
+  };
+
   return (
-    <div className="app">
-      <header>
-        <strong>Amy</strong> <span className="muted">AI Platform</span>
+    <div className="shell">
+      <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
+        <div className="brand">
+          <span className="logo">A</span> Amy
+        </div>
         <button
-          className="link"
+          className="new-chat"
           onClick={() => {
-            setApiKey("");
-            setKey("");
+            setChatId((n) => n + 1);
+            go("chat");
           }}
         >
-          Change API key
+          + New chat
         </button>
-      </header>
-      {error && <p className="error">{error}</p>}
-      {models && <Chat apiKey={key} models={models} />}
+        <nav>
+          <button className={view === "chat" ? "active" : ""} onClick={() => go("chat")}>
+            Chat
+          </button>
+          <button className={view === "models" ? "active" : ""} onClick={() => go("models")}>
+            Models
+          </button>
+        </nav>
+        <div className="sidebar-footer">
+          <button className="link" onClick={logout}>
+            Change API key
+          </button>
+        </div>
+      </aside>
+      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+      <div className="main">
+        <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
+          ☰
+        </button>
+        {error && <p className="error banner">{error}</p>}
+        {view === "chat" ? (
+          <ChatView
+            key={chatId}
+            api={api}
+            models={models}
+            onBrowseModels={() => go("models")}
+          />
+        ) : (
+          <ModelsView api={api} onModelsChanged={refreshModels} onUseModel={() => go("chat")} />
+        )}
+      </div>
     </div>
   );
 }
@@ -62,7 +111,9 @@ function KeyPrompt({ error, onSubmit }: { error: string; onSubmit: (key: string)
         if (value.trim()) onSubmit(value.trim());
       }}
     >
-      <h1>Amy AI Platform</h1>
+      <div className="brand big">
+        <span className="logo">A</span> Amy
+      </div>
       <p className="muted">
         Enter your API key. On first start it is printed in the container logs and saved to{" "}
         <code>/data/secrets/api_key</code>.
@@ -74,112 +125,10 @@ function KeyPrompt({ error, onSubmit }: { error: string; onSubmit: (key: string)
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
-      <button type="submit">Continue</button>
+      <button type="submit" className="primary">
+        Continue
+      </button>
       {error && <p className="error">{error}</p>}
     </form>
-  );
-}
-
-function Chat({ apiKey, models }: { apiKey: string; models: string[] }) {
-  const [model, setModel] = useState(models[0] ?? "");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const abort = useRef<AbortController | null>(null);
-  const bottom = useRef<HTMLDivElement>(null);
-
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [messages]);
-
-  async function send() {
-    const text = input.trim();
-    if (!text || !model || busy) return;
-    const history: ChatMessage[] = [...messages, { role: "user", content: text }];
-    setMessages([...history, { role: "assistant", content: "" }]);
-    setInput("");
-    setBusy(true);
-    setError("");
-    abort.current = new AbortController();
-    try {
-      await streamChat(
-        apiKey,
-        model,
-        history,
-        (delta) =>
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            return [...prev.slice(0, -1), { ...last, content: last.content + delta }];
-          }),
-        abort.current.signal,
-      );
-    } catch (e) {
-      if (!(e instanceof DOMException && e.name === "AbortError")) {
-        setError(String(e instanceof Error ? e.message : e));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (models.length === 0) {
-    return (
-      <div className="empty">
-        <h2>No models available</h2>
-        <p className="muted">
-          Pull a model into Ollama (e.g. <code>docker exec -it amy-ai-platform ollama pull llama3.2</code>)
-          or configure a provider with <code>AMY_PROVIDERS</code>, then reload.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <main className="chat">
-      <div className="toolbar">
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          {models.map((m) => (
-            <option key={m}>{m}</option>
-          ))}
-        </select>
-        <button className="link" onClick={() => setMessages([])} disabled={busy}>
-          New chat
-        </button>
-      </div>
-      <div className="messages">
-        {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>
-            {m.content || (busy && i === messages.length - 1 ? "…" : "")}
-          </div>
-        ))}
-        {error && <p className="error">{error}</p>}
-        <div ref={bottom} />
-      </div>
-      <form
-        className="composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send();
-        }}
-      >
-        <textarea
-          value={input}
-          placeholder="Message Amy…"
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void send();
-            }
-          }}
-        />
-        {busy ? (
-          <button type="button" onClick={() => abort.current?.abort()}>
-            Stop
-          </button>
-        ) : (
-          <button type="submit">Send</button>
-        )}
-      </form>
-    </main>
   );
 }

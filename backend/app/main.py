@@ -10,8 +10,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import openai, system
+from app.api import models, openai, system
 from app.config import Settings, get_settings
+from app.ollama_admin import OllamaAdmin
 from app.providers import ProviderRegistry
 from app.security import load_or_create_api_key
 
@@ -24,6 +25,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.http = httpx.AsyncClient(timeout=settings.upstream_timeout)
+        if settings.ollama_url:
+            app.state.ollama_admin = OllamaAdmin(settings.ollama_url, app.state.http)
         yield
         await app.state.http.aclose()
 
@@ -31,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.api_key = load_or_create_api_key(settings)
     app.state.providers = ProviderRegistry.from_settings(settings)
+    app.state.ollama_admin = None
 
     if settings.cors_origins:
         app.add_middleware(
@@ -42,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(system.public)
     app.include_router(system.router)
+    app.include_router(models.router)
     app.include_router(openai.router)
 
     _mount_frontend(app, settings)

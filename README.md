@@ -8,14 +8,19 @@ open-source workplace suite (documents, spreadsheets, tasks, notes, code, chat, 
 Each app is its own container. The AI Platform is the AI service your other apps
 call, and it can act on those apps through their APIs.
 
-> **Status: early development (v0.1).** Working today: chat with streaming, a
-> multi-provider OpenAI-compatible API, bundled Ollama with NVIDIA GPU support,
-> API-key auth. See [Roadmap](#roadmap).
+> **Status: early development.** Working today: a ChatGPT-style chat, hardware-aware
+> model discovery with one-click installs, a multi-provider OpenAI-compatible API,
+> bundled Ollama with NVIDIA GPU support, and API-key auth. See [Roadmap](#roadmap).
 
 ## Features
 
 - **One container, zero config.** Bundled [Ollama](https://ollama.com) with CUDA.
-  Start it, pull a model, chat.
+- **Model discovery for your hardware.** Amy detects your GPU, memory and disk, rates
+  every model in a curated catalog ("Runs on GPU", "Partial GPU", "Too large"), and
+  recommends the best fit for each use case: chat, reasoning, code, vision, embeddings.
+  One click downloads it and pre-warms it for your GPU. Any other Ollama or Hugging Face
+  GGUF model can be installed by name.
+- **ChatGPT-style chat** with streaming, markdown, and collapsible "thinking" for reasoning models.
 - **OpenAI-compatible API** at `/v1`. Point any OpenAI SDK or app at it.
 - **Bring any engine.** Bundled Ollama, an external Ollama, llama.cpp server, vLLM,
   LM Studio, or hosted APIs. Models from all of them appear in one list, as
@@ -38,10 +43,10 @@ docker run -d --name amy-ai-platform --gpus all \
   ghcr.io/amy-workspaice/ai-platform:latest
 
 docker logs amy-ai-platform          # shows your API key
-docker exec -it amy-ai-platform ollama pull llama3.2
 ```
 
-Then open **http://localhost:8484**. No GPU? Leave out `--gpus all`.
+Then open **http://localhost:8484**, paste the key, and go to **Models** to install a
+model that fits your hardware. No GPU? Leave out `--gpus all`.
 
 More options (compose, external Ollama, Windows/macOS):
 [docs/install/docker.md](docs/install/docker.md) and [docs/install/other.md](docs/install/other.md).
@@ -79,8 +84,10 @@ print(reply.choices[0].message.content)
 - [x] OpenAI-compatible proxy over multiple providers
 - [x] Web chat with streaming
 - [x] Bundled Ollama + NVIDIA GPU, Unraid template
-- [ ] Persistent conversation history
-- [ ] Provider and model management in the UI (pull models, VRAM-aware suggestions)
+- [x] Hardware-aware model discovery, one-click install with progress, delete
+- [ ] Persistent conversation history (sidebar chat list)
+- [ ] Image generation and audio engines (catalog entries exist, marked "coming soon")
+- [ ] Provider management in the UI
 - [ ] Multiple API keys and users
 - [ ] Customization: personas/system prompts, themes, plugins
 - [ ] Connectors: use other Amy WorkspAIce apps (and any MCP server) as tools

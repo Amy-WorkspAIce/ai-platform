@@ -19,6 +19,10 @@ if [ "$(id -u)" = "0" ]; then
   chown "$PUID:$PGID" "$DATA"
   [ -d "$DATA/secrets" ] && chown -R "$PUID:$PGID" "$DATA/secrets"
   [ -d "$DATA/ollama" ] && chown "$PUID:$PGID" "$DATA/ollama"
+  # Compiled GPU kernels; persisting them avoids a slow first run after every restart.
+  if [ -n "${CUDA_CACHE_PATH:-}" ]; then
+    mkdir -p "$CUDA_CACHE_PATH" && chown -R "$PUID:$PGID" "$CUDA_CACHE_PATH"
+  fi
   export HOME="$DATA"
   run_as() { setpriv --reuid="$PUID" --regid="$PGID" --init-groups "$@"; }
 fi

@@ -1,0 +1,485 @@
+{
+  "use_cases": [
+    {
+      "id": "chat",
+      "name": "Chat",
+      "description": "General assistant: questions, writing, summarizing."
+    },
+    {
+      "id": "reasoning",
+      "name": "Reasoning",
+      "description": "Thinks step by step before answering. Better at math, logic and planning; slower."
+    },
+    {
+      "id": "code",
+      "name": "Code",
+      "description": "Writing, explaining and fixing code."
+    },
+    {
+      "id": "vision",
+      "name": "Vision",
+      "description": "Understands images you attach: screenshots, photos, documents."
+    },
+    {
+      "id": "embedding",
+      "name": "Embeddings",
+      "description": "Turns text into vectors for search and RAG. Used by apps, not for chatting."
+    },
+    {
+      "id": "image",
+      "name": "Image generation",
+      "description": "Creates images from text prompts."
+    },
+    {
+      "id": "audio",
+      "name": "Audio",
+      "description": "Speech-to-text and text-to-speech."
+    }
+  ],
+  "engines": [
+    {
+      "id": "ollama",
+      "name": "Ollama",
+      "available": true
+    },
+    {
+      "id": "image",
+      "name": "Image engine",
+      "available": false,
+      "note": "Image generation engine support is planned."
+    },
+    {
+      "id": "audio",
+      "name": "Audio engine",
+      "available": false,
+      "note": "Speech engine support is planned."
+    }
+  ],
+  "families": [
+    {
+      "id": "qwen3",
+      "name": "Qwen 3",
+      "publisher": "Alibaba",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "chat",
+        "reasoning"
+      ],
+      "description": "Strong all-rounder with optional thinking mode. Good default at every size.",
+      "variants": [
+        {
+          "tag": "qwen3:0.6b",
+          "params": "0.6B",
+          "size_gb": 0.52
+        },
+        {
+          "tag": "qwen3:1.7b",
+          "params": "1.7B",
+          "size_gb": 1.36
+        },
+        {
+          "tag": "qwen3:4b",
+          "params": "4B",
+          "size_gb": 2.5
+        },
+        {
+          "tag": "qwen3:8b",
+          "params": "8B",
+          "size_gb": 5.23
+        },
+        {
+          "tag": "qwen3:14b",
+          "params": "14B",
+          "size_gb": 9.28
+        },
+        {
+          "tag": "qwen3:30b",
+          "params": "30B (MoE, 3B active)",
+          "size_gb": 18.56
+        },
+        {
+          "tag": "qwen3:32b",
+          "params": "32B",
+          "size_gb": 20.2
+        }
+      ]
+    },
+    {
+      "id": "gemma3",
+      "name": "Gemma 3",
+      "publisher": "Google",
+      "license": "Gemma Terms of Use",
+      "engine": "ollama",
+      "use_cases": [
+        "chat",
+        "vision"
+      ],
+      "description": "Friendly, well-rounded chat model that can also read images (4B and up).",
+      "variants": [
+        {
+          "tag": "gemma3:1b",
+          "params": "1B",
+          "size_gb": 0.81,
+          "use_cases": [
+            "chat"
+          ]
+        },
+        {
+          "tag": "gemma3:4b",
+          "params": "4B",
+          "size_gb": 3.35
+        },
+        {
+          "tag": "gemma3:12b",
+          "params": "12B",
+          "size_gb": 8.16
+        },
+        {
+          "tag": "gemma3:27b",
+          "params": "27B",
+          "size_gb": 17.41
+        }
+      ]
+    },
+    {
+      "id": "gpt-oss",
+      "name": "gpt-oss",
+      "publisher": "OpenAI",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "chat",
+        "reasoning",
+        "code"
+      ],
+      "description": "OpenAI's open-weight reasoning models. Fast for their size (mixture of experts).",
+      "variants": [
+        {
+          "tag": "gpt-oss:20b",
+          "params": "20B (MoE)",
+          "size_gb": 13.79
+        },
+        {
+          "tag": "gpt-oss:120b",
+          "params": "120B (MoE)",
+          "size_gb": 65.37
+        }
+      ]
+    },
+    {
+      "id": "llama3",
+      "name": "Llama 3.x",
+      "publisher": "Meta",
+      "license": "Llama Community License",
+      "engine": "ollama",
+      "use_cases": [
+        "chat"
+      ],
+      "description": "Widely used, dependable chat models.",
+      "variants": [
+        {
+          "tag": "llama3.2:1b",
+          "params": "1B",
+          "size_gb": 1.32
+        },
+        {
+          "tag": "llama3.2:3b",
+          "params": "3B",
+          "size_gb": 2.02
+        },
+        {
+          "tag": "llama3.1:8b",
+          "params": "8B",
+          "size_gb": 4.92
+        }
+      ]
+    },
+    {
+      "id": "mistral-small",
+      "name": "Mistral Small 3.2",
+      "publisher": "Mistral AI",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "chat",
+        "vision"
+      ],
+      "description": "Capable mid-size model with image understanding and good instruction following.",
+      "variants": [
+        {
+          "tag": "mistral-small3.2:24b",
+          "params": "24B",
+          "size_gb": 15.18
+        }
+      ]
+    },
+    {
+      "id": "phi4",
+      "name": "Phi-4",
+      "publisher": "Microsoft",
+      "license": "MIT",
+      "engine": "ollama",
+      "use_cases": [
+        "chat",
+        "reasoning"
+      ],
+      "description": "Small models that punch above their weight on reasoning and math.",
+      "variants": [
+        {
+          "tag": "phi4-mini:3.8b",
+          "params": "3.8B",
+          "size_gb": 2.49
+        },
+        {
+          "tag": "phi4:14b",
+          "params": "14B",
+          "size_gb": 9.05
+        }
+      ]
+    },
+    {
+      "id": "deepseek-r1",
+      "name": "DeepSeek-R1 (distilled)",
+      "publisher": "DeepSeek",
+      "license": "MIT",
+      "engine": "ollama",
+      "use_cases": [
+        "reasoning"
+      ],
+      "description": "Dedicated reasoning models that show their chain of thought.",
+      "variants": [
+        {
+          "tag": "deepseek-r1:1.5b",
+          "params": "1.5B",
+          "size_gb": 1.12
+        },
+        {
+          "tag": "deepseek-r1:8b",
+          "params": "8B",
+          "size_gb": 5.23
+        },
+        {
+          "tag": "deepseek-r1:14b",
+          "params": "14B",
+          "size_gb": 8.99
+        },
+        {
+          "tag": "deepseek-r1:32b",
+          "params": "32B",
+          "size_gb": 19.85
+        },
+        {
+          "tag": "deepseek-r1:70b",
+          "params": "70B",
+          "size_gb": 42.52
+        }
+      ]
+    },
+    {
+      "id": "qwen3-coder",
+      "name": "Qwen3-Coder",
+      "publisher": "Alibaba",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "code"
+      ],
+      "description": "Agentic coding model, fast for its size (mixture of experts).",
+      "variants": [
+        {
+          "tag": "qwen3-coder:30b",
+          "params": "30B (MoE, 3B active)",
+          "size_gb": 18.56
+        }
+      ]
+    },
+    {
+      "id": "qwen2.5-coder",
+      "name": "Qwen2.5-Coder",
+      "publisher": "Alibaba",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "code"
+      ],
+      "description": "Proven code models, including small sizes for autocomplete.",
+      "variants": [
+        {
+          "tag": "qwen2.5-coder:1.5b",
+          "params": "1.5B",
+          "size_gb": 0.99
+        },
+        {
+          "tag": "qwen2.5-coder:7b",
+          "params": "7B",
+          "size_gb": 4.68
+        },
+        {
+          "tag": "qwen2.5-coder:14b",
+          "params": "14B",
+          "size_gb": 8.99
+        },
+        {
+          "tag": "qwen2.5-coder:32b",
+          "params": "32B",
+          "size_gb": 19.85
+        }
+      ]
+    },
+    {
+      "id": "qwen2.5vl",
+      "name": "Qwen2.5-VL",
+      "publisher": "Alibaba",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "vision"
+      ],
+      "description": "Vision specialist: OCR, charts, screenshots, documents.",
+      "variants": [
+        {
+          "tag": "qwen2.5vl:3b",
+          "params": "3B",
+          "size_gb": 3.2
+        },
+        {
+          "tag": "qwen2.5vl:7b",
+          "params": "7B",
+          "size_gb": 5.97
+        },
+        {
+          "tag": "qwen2.5vl:32b",
+          "params": "32B",
+          "size_gb": 21.16
+        }
+      ]
+    },
+    {
+      "id": "nomic-embed-text",
+      "name": "Nomic Embed Text",
+      "publisher": "Nomic AI",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "embedding"
+      ],
+      "description": "Popular, lightweight text embedding model.",
+      "variants": [
+        {
+          "tag": "nomic-embed-text:latest",
+          "params": "137M",
+          "size_gb": 0.27
+        }
+      ]
+    },
+    {
+      "id": "embeddinggemma",
+      "name": "EmbeddingGemma",
+      "publisher": "Google",
+      "license": "Gemma Terms of Use",
+      "engine": "ollama",
+      "use_cases": [
+        "embedding"
+      ],
+      "description": "Small multilingual embedding model.",
+      "variants": [
+        {
+          "tag": "embeddinggemma:latest",
+          "params": "300M",
+          "size_gb": 0.62
+        }
+      ]
+    },
+    {
+      "id": "mxbai-embed-large",
+      "name": "mxbai-embed-large",
+      "publisher": "Mixedbread",
+      "license": "Apache-2.0",
+      "engine": "ollama",
+      "use_cases": [
+        "embedding"
+      ],
+      "description": "Higher-quality English embeddings.",
+      "variants": [
+        {
+          "tag": "mxbai-embed-large:latest",
+          "params": "335M",
+          "size_gb": 0.67
+        }
+      ]
+    },
+    {
+      "id": "flux-schnell",
+      "name": "FLUX.1 [schnell]",
+      "publisher": "Black Forest Labs",
+      "license": "Apache-2.0",
+      "engine": "image",
+      "use_cases": [
+        "image"
+      ],
+      "description": "Fast, high-quality text-to-image.",
+      "variants": [
+        {
+          "tag": "flux.1-schnell",
+          "params": "12B",
+          "size_gb": 12
+        }
+      ]
+    },
+    {
+      "id": "sdxl",
+      "name": "Stable Diffusion XL",
+      "publisher": "Stability AI",
+      "license": "CreativeML Open RAIL++-M",
+      "engine": "image",
+      "use_cases": [
+        "image"
+      ],
+      "description": "Classic text-to-image model with a huge ecosystem of styles.",
+      "variants": [
+        {
+          "tag": "sdxl-base-1.0",
+          "params": "3.5B",
+          "size_gb": 7
+        }
+      ]
+    },
+    {
+      "id": "whisper",
+      "name": "Whisper large-v3-turbo",
+      "publisher": "OpenAI",
+      "license": "MIT",
+      "engine": "audio",
+      "use_cases": [
+        "audio"
+      ],
+      "description": "Speech-to-text transcription in many languages.",
+      "variants": [
+        {
+          "tag": "whisper-large-v3-turbo",
+          "params": "809M",
+          "size_gb": 1.6
+        }
+      ]
+    },
+    {
+      "id": "kokoro",
+      "name": "Kokoro TTS",
+      "publisher": "hexgrad",
+      "license": "Apache-2.0",
+      "engine": "audio",
+      "use_cases": [
+        "audio"
+      ],
+      "description": "Small, natural-sounding text-to-speech.",
+      "variants": [
+        {
+          "tag": "kokoro-82m",
+          "params": "82M",
+          "size_gb": 0.33
+        }
+      ]
+    }
+  ]
+}

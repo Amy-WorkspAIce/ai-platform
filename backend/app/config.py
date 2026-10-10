@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Comma-separated origins allowed to call the API from a browser (for other apps' frontends).
     cors_origins: str = ""
 
+    # Override GPU memory detection (GB), e.g. when Ollama runs on a different machine
+    # or the GPU isn't NVIDIA. Used for model recommendations only.
+    gpu_vram_gb: float | None = None
+
     # Timeout for upstream model requests, in seconds. Generation can be slow on big models.
     upstream_timeout: float = 600.0
 
