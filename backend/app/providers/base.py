@@ -31,7 +31,8 @@ class Provider:
         try:
             resp = await client.get(self.url("models"), headers=self.headers(), timeout=10)
             resp.raise_for_status()
-            return [m["id"] for m in resp.json().get("data", [])]
+            # Ollama returns "data": null when no models are pulled.
+            return [m["id"] for m in resp.json().get("data") or []]
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             log.info("Provider %s unavailable: %s", self.name, exc)
             return []

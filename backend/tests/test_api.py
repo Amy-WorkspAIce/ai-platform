@@ -81,3 +81,18 @@ def test_proxies_chat_to_provider(tmp_path):
         )
         assert resp.status_code == 200
         assert resp.json()["choices"][0]["message"]["content"] == "hi"
+
+
+def test_provider_with_no_models(tmp_path):
+    settings = Settings(
+        data_dir=tmp_path,
+        api_key=KEY,
+        ollama_url="http://ollama:11434",
+        static_dir=tmp_path,
+    )
+    with TestClient(create_app(settings)) as c:
+        c.app.state.http = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"data": None}))
+        )
+        assert c.get("/v1/models", headers=auth()).json()["data"] == []
+        assert c.get("/api/system", headers=auth()).json()["providers"][0]["online"] is False
