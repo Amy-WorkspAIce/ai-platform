@@ -10,6 +10,8 @@ All settings are environment variables. None are required.
 | `AMY_PROVIDERS` | `[]` | Extra OpenAI-compatible providers, as a JSON list of `{"name", "base_url", "api_key"?}`. `base_url` is the API root (usually ends in `/v1`). |
 | `AMY_CORS_ORIGINS` | *(none)* | Comma-separated browser origins allowed to call the API (for other apps' frontends). |
 | `AMY_GPU_VRAM_GB` | *(detected)* | Override detected GPU memory for model recommendations. Useful when Ollama runs on another machine (slim image) or the GPU isn't NVIDIA. |
+| `AMY_ENGINE_IDLE_MINUTES` | `10` | Stop idle image/audio engine workers after this long, returning their RAM and VRAM to language models. |
+| `AMY_TORCH_INDEX_URL` | `https://download.pytorch.org/whl/cu128` | PyTorch wheel index for the image engine on NVIDIA GPUs. cu128 needs driver 570+; use `.../whl/cu126` for older drivers. Machines without an NVIDIA GPU use the CPU wheels. |
 | `AMY_UPSTREAM_TIMEOUT` | `600` | Seconds to wait on a model engine. |
 | `AMY_DATA_DIR` | `/data` | Persistent state directory. |
 | `AMY_PORT` | `8484` | Listen port inside the container. |

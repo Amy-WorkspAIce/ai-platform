@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Api,
   setPref,
+  type Capability,
   type Catalog,
   type Family,
   type Fit,
@@ -14,11 +15,12 @@ import {
 type Props = {
   api: Api;
   onModelsChanged: () => void;
-  onUseModel: () => void;
+  onUseModel: (capability: Capability) => void;
 };
 
 const FIT_LABEL: Record<Fit, string> = {
   gpu: "Runs on GPU",
+  light: "Runs anywhere",
   partial: "Partial GPU · slower",
   cpu: "Runs on CPU · slow",
   too_large: "Too large",
@@ -95,17 +97,27 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
   }
 
   function use(tag: string) {
-    setPref("model", `ollama/${tag}`);
-    onUseModel();
+    const entry = variantsByTag.get(tag);
+    const engine = entry?.family.engine ?? "ollama";
+    if (engine === "image") {
+      setPref("imageModel", `image/${tag}`);
+      onUseModel("image");
+    } else if (engine === "audio") {
+      onUseModel(entry!.variant.use_cases.includes("speech") ? "speech" : "transcription");
+    } else {
+      setPref("model", `ollama/${tag}`);
+      onUseModel("chat");
+    }
   }
+
+  const variantsByTag = new Map(
+    (catalog?.families ?? []).flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)),
+  );
 
   if (!catalog) {
     return <div className="page">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</div>;
   }
 
-  const variantsByTag = new Map(
-    catalog.families.flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)),
-  );
   const families = catalog.families.filter((f) => filter === "all" || f.use_cases.includes(filter));
   const catalogTags = new Set(variantsByTag.keys());
   const extraInstalled = installed.filter((m) => !catalogTags.has(m.name));
@@ -273,6 +285,7 @@ function FamilyCard({
         </div>
       </div>
       <p className="muted small">{family.description} <span className="license">License: {family.license}</span></p>
+      {family.engine_note && <p className="engine-note small">{family.engine_note}</p>}
       {family.variants.map((v) => (
         <div key={v.tag} className="variant-row">
           <span>{v.params}</span>
@@ -312,7 +325,9 @@ function VariantAction({ v, install, remove, use, pulls }: { v: Variant } & Acti
   if (v.installed) {
     return (
       <span className="row-actions">
-        <button className="secondary" onClick={() => use(v.tag)}>Use</button>
+        {!v.use_cases.includes("embedding") && (
+          <button className="secondary" onClick={() => use(v.tag)}>Use</button>
+        )}
         <button className="link danger" onClick={() => remove(v.tag)}>Delete</button>
       </span>
     );

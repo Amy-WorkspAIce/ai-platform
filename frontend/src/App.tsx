@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Api, AuthError, getApiKey, setApiKey } from "./api";
+import { Api, AuthError, getApiKey, setApiKey, type Conversation, type ModelInfo } from "./api";
+import { AudioView } from "./views/AudioView";
 import { ChatView } from "./views/ChatView";
+import { ImagesView } from "./views/ImagesView";
 import { ModelsView } from "./views/ModelsView";
 
-type View = "chat" | "models";
+export type View = "chat" | "images" | "audio" | "models";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
   const api = useMemo(() => new Api(key), [key]);
-  const [models, setModels] = useState<string[] | null>(null);
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [error, setError] = useState("");
   const [view, setView] = useState<View>("chat");
-  const [chatId, setChatId] = useState(0);
+  // chatKey remounts ChatView on explicit navigation only, so a chat that saves itself
+  // mid-stream (getting an id) isn't remounted.
+  const [chat, setChat] = useState<{ key: number; id: string | null }>({ key: 0, id: null });
   const [menuOpen, setMenuOpen] = useState(false);
 
   const logout = useCallback(() => {
@@ -20,19 +25,36 @@ export function App() {
     setModels(null);
   }, []);
 
+  const handleError = useCallback(
+    (e: unknown) => {
+      if (e instanceof AuthError) logout();
+      setError(e instanceof Error ? e.message : String(e));
+    },
+    [logout],
+  );
+
   const refreshModels = useCallback(async () => {
     try {
       setModels(await api.listModels());
       setError("");
     } catch (e) {
-      if (e instanceof AuthError) logout();
-      setError(e instanceof Error ? e.message : String(e));
+      handleError(e);
     }
-  }, [api, logout]);
+  }, [api, handleError]);
+
+  const refreshConversations = useCallback(async () => {
+    try {
+      setConversations(await api.conversations());
+    } catch (e) {
+      handleError(e);
+    }
+  }, [api, handleError]);
 
   useEffect(() => {
-    if (key) void refreshModels();
-  }, [key, refreshModels]);
+    if (!key) return;
+    void refreshModels();
+    void refreshConversations();
+  }, [key, refreshModels, refreshConversations]);
 
   if (!key) {
     return (
@@ -50,6 +72,35 @@ export function App() {
     setView(v);
     setMenuOpen(false);
   };
+  const openChat = (id: string | null) => {
+    setChat((c) => ({ key: c.key + 1, id }));
+    go("chat");
+  };
+
+  const byCapability = (cap: ModelInfo["capability"]) =>
+    models?.filter((m) => m.capability === cap) ?? null;
+
+  async function rename(c: Conversation) {
+    const title = prompt("Rename chat", c.title)?.trim();
+    if (!title || title === c.title) return;
+    try {
+      await api.renameConversation(c.id, title);
+      void refreshConversations();
+    } catch (e) {
+      handleError(e);
+    }
+  }
+
+  async function remove(c: Conversation) {
+    if (!confirm(`Delete "${c.title}"?`)) return;
+    try {
+      await api.deleteConversation(c.id);
+      if (chat.id === c.id) openChat(null);
+      void refreshConversations();
+    } catch (e) {
+      handleError(e);
+    }
+  }
 
   return (
     <div className="shell">
@@ -57,23 +108,39 @@ export function App() {
         <div className="brand">
           <span className="logo">A</span> Amy
         </div>
-        <button
-          className="new-chat"
-          onClick={() => {
-            setChatId((n) => n + 1);
-            go("chat");
-          }}
-        >
+        <button className="new-chat" onClick={() => openChat(null)}>
           + New chat
         </button>
         <nav>
-          <button className={view === "chat" ? "active" : ""} onClick={() => go("chat")}>
-            Chat
-          </button>
-          <button className={view === "models" ? "active" : ""} onClick={() => go("models")}>
-            Models
-          </button>
+          {(["chat", "images", "audio", "models"] as View[]).map((v) => (
+            <button key={v} className={view === v ? "active" : ""} onClick={() => go(v)}>
+              {v[0].toUpperCase() + v.slice(1)}
+            </button>
+          ))}
         </nav>
+        {conversations.length > 0 && (
+          <div className="history">
+            <div className="history-label">Recent chats</div>
+            {conversations.map((c) => (
+              <div
+                key={c.id}
+                className={`history-item ${view === "chat" && chat.id === c.id ? "active" : ""}`}
+              >
+                <button className="history-title" title={c.title} onClick={() => openChat(c.id)}>
+                  {c.title}
+                </button>
+                <span className="history-actions">
+                  <button aria-label="Rename" title="Rename" onClick={() => rename(c)}>
+                    ✎
+                  </button>
+                  <button aria-label="Delete" title="Delete" onClick={() => remove(c)}>
+                    ✕
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="sidebar-footer">
           <button className="link" onClick={logout}>
             Change API key
@@ -85,16 +152,45 @@ export function App() {
         <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
           ☰
         </button>
-        {error && <p className="error banner">{error}</p>}
-        {view === "chat" ? (
+        {error && (
+          <p className="error banner" onClick={() => setError("")}>
+            {error}
+          </p>
+        )}
+        {view === "chat" && (
           <ChatView
-            key={chatId}
+            key={chat.key}
             api={api}
-            models={models}
+            conversationId={chat.id}
+            models={byCapability("chat")}
+            sttModel={byCapability("transcription")?.[0]?.id}
+            ttsModel={byCapability("speech")?.[0]?.id}
+            onSaved={(id) => {
+              setChat((c) => ({ ...c, id }));
+              void refreshConversations();
+            }}
             onBrowseModels={() => go("models")}
           />
-        ) : (
-          <ModelsView api={api} onModelsChanged={refreshModels} onUseModel={() => go("chat")} />
+        )}
+        {view === "images" && (
+          <ImagesView api={api} models={byCapability("image")} onBrowseModels={() => go("models")} />
+        )}
+        {view === "audio" && (
+          <AudioView
+            api={api}
+            sttModels={byCapability("transcription")}
+            ttsModels={byCapability("speech")}
+            onBrowseModels={() => go("models")}
+          />
+        )}
+        {view === "models" && (
+          <ModelsView
+            api={api}
+            onModelsChanged={refreshModels}
+            onUseModel={(capability) =>
+              go(capability === "image" ? "images" : capability === "chat" ? "chat" : "audio")
+            }
+          />
         )}
       </div>
     </div>

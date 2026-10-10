@@ -1,17 +1,13 @@
-"""Ollama model management: list, pull (with progress), delete.
-
-Pulls run as background tasks owned by the server, so they survive the browser
-navigating away; the UI polls ``PullManager.snapshot()`` for progress.
-"""
+"""Ollama model management: list, pull (with progress and GPU warm-up), delete, unload."""
 
 import asyncio
 import json
 import logging
 import re
-import time
-from dataclasses import asdict, dataclass, field
 
 import httpx
+
+from app.jobs import JobRegistry, PullState
 
 log = logging.getLogger(__name__)
 
@@ -23,31 +19,11 @@ def valid_model_name(name: str) -> bool:
     return bool(MODEL_NAME.match(name)) and ".." not in name
 
 
-@dataclass
-class PullState:
-    model: str
-    status: str = "queued"
-    completed: int = 0
-    total: int = 0
-    done: bool = False
-    downloaded: bool = False
-    error: str | None = None
-    started_at: float = field(default_factory=time.time)
-    # Per-layer progress; Ollama reports each blob separately.
-    _layers: dict[str, tuple[int, int]] = field(default_factory=dict, repr=False)
-
-    def public(self) -> dict:
-        d = asdict(self)
-        d.pop("_layers")
-        return d
-
-
 class OllamaAdmin:
-    def __init__(self, server_url: str, client: httpx.AsyncClient):
+    def __init__(self, server_url: str, client: httpx.AsyncClient, jobs: JobRegistry):
         self.server_url = server_url.rstrip("/")
         self.client = client
-        self.pulls: dict[str, PullState] = {}
-        self._tasks: set[asyncio.Task] = set()
+        self.jobs = jobs
 
     async def installed(self) -> list[dict]:
         resp = await self.client.get(f"{self.server_url}/api/tags", timeout=10)
@@ -60,22 +36,29 @@ class OllamaAdmin:
         )
         resp.raise_for_status()
 
-    def start_pull(self, model: str) -> PullState:
-        existing = self.pulls.get(model)
-        if existing and not existing.done:
-            return existing
-        state = PullState(model=model)
-        self.pulls[model] = state
-        task = asyncio.create_task(self._pull(state))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-        return state
+    async def unload_all(self) -> None:
+        """Free GPU memory held by loaded models (e.g. before image generation)."""
+        try:
+            for m in await self._loaded():
+                await self.client.post(
+                    f"{self.server_url}/api/generate",
+                    json={"model": m["name"], "keep_alive": 0},
+                    timeout=30,
+                )
+            # Unloading is asynchronous; wait (briefly) until the memory is actually free.
+            for _ in range(20):
+                if not await self._loaded():
+                    return
+                await asyncio.sleep(0.5)
+        except (httpx.HTTPError, ValueError) as exc:
+            log.info("Could not unload Ollama models: %s", exc)
 
-    def snapshot(self) -> list[dict]:
-        # Forget finished pulls after 10 minutes.
-        cutoff = time.time() - 600
-        self.pulls = {k: s for k, s in self.pulls.items() if not s.done or s.started_at > cutoff}
-        return [s.public() for s in self.pulls.values()]
+    async def _loaded(self) -> list[dict]:
+        resp = await self.client.get(f"{self.server_url}/api/ps", timeout=5)
+        return resp.json().get("models") or []
+
+    def start_pull(self, model: str) -> PullState:
+        return self.jobs.start(model, self._pull)
 
     async def _pull(self, state: PullState) -> None:
         try:
@@ -89,16 +72,16 @@ class OllamaAdmin:
                 async for line in resp.aiter_lines():
                     if line.strip():
                         apply_progress(state, json.loads(line))
-                    if state.done or state.downloaded:
+                    if state.error or state.downloaded:
                         break
-            if state.downloaded:
-                await self._warm_up(state)
-            elif not state.done:
-                state.error = state.error or "Pull ended unexpectedly"
-            state.done = True
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("Pull of %s failed: %s", state.model, exc)
-            state.done, state.error = True, str(exc) or type(exc).__name__
+            state.error = str(exc) or type(exc).__name__
+            return
+        if state.downloaded:
+            await self._warm_up(state)
+        elif not state.error:
+            state.error = "Pull ended unexpectedly"
 
     async def _warm_up(self, state: PullState) -> None:
         """Load the model and generate one token.
@@ -123,7 +106,7 @@ class OllamaAdmin:
 
 def apply_progress(state: PullState, event: dict) -> None:
     if "error" in event:
-        state.done, state.error, state.status = True, event["error"], "error"
+        state.error, state.status = event["error"], "error"
         return
     state.status = event.get("status", state.status)
     digest = event.get("digest")

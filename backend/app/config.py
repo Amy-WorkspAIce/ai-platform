@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     # or the GPU isn't NVIDIA. Used for model recommendations only.
     gpu_vram_gb: float | None = None
 
+    # PyTorch wheel index for the image engine on NVIDIA GPUs (cu128 supports Turing
+    # through Blackwell and needs driver 570+). CPU-only machines use the CPU index.
+    torch_index_url: str = "https://download.pytorch.org/whl/cu128"
+
+    # Stop idle image/audio engine workers after this many minutes, freeing their memory.
+    engine_idle_minutes: float = 10
+
     # Timeout for upstream model requests, in seconds. Generation can be slow on big models.
     upstream_timeout: float = 600.0
 

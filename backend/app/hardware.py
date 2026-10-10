@@ -42,7 +42,7 @@ class Hardware:
 
 def detect(data_dir: Path, vram_override_gb: float | None = None) -> Hardware:
     hw = Hardware(
-        gpus=_nvidia_gpus(),
+        gpus=nvidia_gpus(),
         cpu_count=os.cpu_count(),
         disk_free_gb=_disk_free(data_dir),
     )
@@ -53,7 +53,7 @@ def detect(data_dir: Path, vram_override_gb: float | None = None) -> Hardware:
     return hw
 
 
-def _nvidia_gpus() -> list[Gpu]:
+def nvidia_gpus() -> list[Gpu]:
     exe = shutil.which("nvidia-smi")
     if not exe:
         return []

@@ -9,9 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import __version__
-from app.api import models, openai, system
+from app import __version__, hardware
+from app.api import conversations, media, models, openai, system
 from app.config import Settings, get_settings
+from app.db import Database
+from app.engines import EngineManager
+from app.jobs import JobRegistry
 from app.ollama_admin import OllamaAdmin
 from app.providers import ProviderRegistry
 from app.security import load_or_create_api_key
@@ -26,8 +29,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.http = httpx.AsyncClient(timeout=settings.upstream_timeout)
         if settings.ollama_url:
-            app.state.ollama_admin = OllamaAdmin(settings.ollama_url, app.state.http)
+            app.state.ollama_admin = OllamaAdmin(
+                settings.ollama_url, app.state.http, app.state.jobs
+            )
         yield
+        await app.state.engines.stop_all()
         await app.state.http.aclose()
 
     app = FastAPI(title="Amy AI Platform", version=__version__, lifespan=lifespan)
@@ -35,6 +41,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.api_key = load_or_create_api_key(settings)
     app.state.providers = ProviderRegistry.from_settings(settings)
     app.state.ollama_admin = None
+    app.state.jobs = JobRegistry()
+    app.state.db = Database(settings.data_dir / "amy.db")
+    app.state.engines = EngineManager(
+        settings.data_dir,
+        app.state.jobs,
+        gpu=bool(hardware.nvidia_gpus()),
+        torch_index_url=settings.torch_index_url,
+        idle_seconds=settings.engine_idle_minutes * 60,
+    )
 
     if settings.cors_origins:
         app.add_middleware(
@@ -47,6 +62,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system.public)
     app.include_router(system.router)
     app.include_router(models.router)
+    app.include_router(conversations.router)
+    app.include_router(media.api)
+    app.include_router(media.v1)
     app.include_router(openai.router)
 
     _mount_frontend(app, settings)

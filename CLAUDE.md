@@ -15,4 +15,7 @@ plus web UI) packaged as a single container, Unraid-first but portable.
   `python scripts/refresh_catalog_sizes.py --write` to verify tags and pull exact sizes from the
   Ollama registry. Image/audio families use engines marked `available: false` until those
   engines are implemented.
+- Image/audio engines live in `backend/app/engines/`. Worker scripts (`*_worker.py`,
+  `_worker_common.py`) run inside the engine's own venv: **stdlib only at import time**, never
+  import from `app.*` there. Bump `EngineSpec.version` when changing an engine's packages.
 - License is AGPL-3.0; only add dependencies with compatible licenses.

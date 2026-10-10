@@ -8,9 +8,10 @@ open-source workplace suite (documents, spreadsheets, tasks, notes, code, chat, 
 Each app is its own container. The AI Platform is the AI service your other apps
 call, and it can act on those apps through their APIs.
 
-> **Status: early development.** Working today: a ChatGPT-style chat, hardware-aware
-> model discovery with one-click installs, a multi-provider OpenAI-compatible API,
-> bundled Ollama with NVIDIA GPU support, and API-key auth. See [Roadmap](#roadmap).
+> **Status: early development.** Working today: a ChatGPT-style chat with saved history,
+> image generation, speech-to-text and text-to-speech, hardware-aware model discovery with
+> one-click installs, a multi-provider OpenAI-compatible API, bundled Ollama with NVIDIA
+> GPU support, and API-key auth. See [Roadmap](#roadmap).
 
 ## Features
 
@@ -20,8 +21,14 @@ call, and it can act on those apps through their APIs.
   recommends the best fit for each use case: chat, reasoning, code, vision, embeddings.
   One click downloads it and pre-warms it for your GPU. Any other Ollama or Hugging Face
   GGUF model can be installed by name.
-- **ChatGPT-style chat** with streaming, markdown, and collapsible "thinking" for reasoning models.
-- **OpenAI-compatible API** at `/v1`. Point any OpenAI SDK or app at it.
+- **ChatGPT-style chat** with saved conversations, streaming, markdown, collapsible
+  "thinking" for reasoning models, dictation and read-aloud.
+- **Image generation** (FLUX.2 klein, Stable Diffusion XL, Z-Image Turbo, SD 1.5) with a
+  gallery, and **audio**: transcription (Whisper) and text-to-speech (Kokoro). The engines
+  these need (PyTorch/diffusers, faster-whisper, ONNX) install themselves into `/data` the
+  first time you install such a model, so the base image stays lean.
+- **OpenAI-compatible API** at `/v1`: chat, images, transcriptions and speech. Point any
+  OpenAI SDK or app at it.
 - **Bring any engine.** Bundled Ollama, an external Ollama, llama.cpp server, vLLM,
   LM Studio, or hosted APIs. Models from all of them appear in one list, as
   `provider/model`.
@@ -85,8 +92,8 @@ print(reply.choices[0].message.content)
 - [x] Web chat with streaming
 - [x] Bundled Ollama + NVIDIA GPU, Unraid template
 - [x] Hardware-aware model discovery, one-click install with progress, delete
-- [ ] Persistent conversation history (sidebar chat list)
-- [ ] Image generation and audio engines (catalog entries exist, marked "coming soon")
+- [x] Saved conversation history (sidebar chat list)
+- [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
 - [ ] Provider management in the UI
 - [ ] Multiple API keys and users
 - [ ] Customization: personas/system prompts, themes, plugins

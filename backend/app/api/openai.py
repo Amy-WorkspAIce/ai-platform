@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
+from app import catalog
+from app.engines import ENGINES
 from app.security import require_api_key
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)])
@@ -25,10 +27,35 @@ async def list_models(request: Request) -> dict:
     results = await asyncio.gather(*(p.list_models(client) for p in providers))
     now = int(time.time())
     data = [
-        {"id": f"{p.name}/{m}", "object": "model", "created": now, "owned_by": p.name}
+        {
+            "id": f"{p.name}/{m}",
+            "object": "model",
+            "created": now,
+            "owned_by": p.name,
+            "capability": "chat",
+        }
         for p, models in zip(providers, results, strict=True)
         for m in models
     ]
+    # Installed image/audio models, e.g. "image/sdxl-base-1.0" (capability: image,
+    # transcription or speech).
+    engines = request.app.state.engines
+    for fam in catalog.load()["families"]:
+        if fam["engine"] not in ENGINES:
+            continue
+        for v in fam["variants"]:
+            if engines.model_installed(fam["engine"], v["tag"]):
+                data.append(
+                    {
+                        "id": f"{fam['engine']}/{v['tag']}",
+                        "object": "model",
+                        "created": now,
+                        "owned_by": fam["engine"],
+                        "capability": v["engine_config"].get("task", fam["use_cases"][0]),
+                        "name": f"{fam['name']} {v['params']}",
+                        **image_options(v["engine_config"]),
+                    }
+                )
     return {"object": "list", "data": data}
 
 
@@ -65,3 +92,9 @@ async def chat_completions(request: Request):
         media_type=resp.headers.get("content-type", "text/event-stream"),
         background=BackgroundTask(resp.aclose),
     )
+
+
+def image_options(cfg: dict) -> dict:
+    if "size" not in cfg:
+        return {}
+    return {"default_size": cfg["size"], "negative_prompt": cfg.get("negative_prompt", False)}

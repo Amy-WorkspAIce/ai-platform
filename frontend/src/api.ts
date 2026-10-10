@@ -28,12 +28,13 @@ export class AuthError extends Error {}
 export class Api {
   constructor(private key: string) {}
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async raw(path: string, init: RequestInit = {}): Promise<Response> {
+    const isForm = init.body instanceof FormData;
     const resp = await fetch(path, {
       ...init,
       headers: {
         Authorization: `Bearer ${this.key}`,
-        "Content-Type": "application/json",
+        ...(isForm ? {} : { "Content-Type": "application/json" }),
         ...init.headers,
       },
     });
@@ -45,15 +46,75 @@ export class Api {
       } catch {
         // not JSON
       }
-      throw new Error(`${resp.status}: ${detail}`);
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
     }
+    return resp;
+  }
+
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const resp = await this.raw(path, init);
     return (resp.status === 204 ? undefined : await resp.json()) as T;
   }
 
-  async listModels(): Promise<string[]> {
-    const body = await this.request<{ data: { id: string }[] }>("/v1/models");
-    return body.data.map((m) => m.id);
+  async listModels(): Promise<ModelInfo[]> {
+    const body = await this.request<{ data: ModelInfo[] }>("/v1/models");
+    return body.data;
   }
+
+  // ---- conversations ----
+  conversations = () => this.request<Conversation[]>("/api/conversations");
+  conversation = (id: string) => this.request<ConversationDetail>(`/api/conversations/${id}`);
+  createConversation = (title: string, model: string) =>
+    this.request<Conversation>("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ title, model }),
+    });
+  renameConversation = (id: string, title: string) =>
+    this.request<Conversation>(`/api/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+  deleteConversation = (id: string) =>
+    this.request<void>(`/api/conversations/${id}`, { method: "DELETE" });
+  addMessage = (id: string, message: ChatMessage & { model?: string }) =>
+    this.request<unknown>(`/api/conversations/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify(message),
+    });
+
+  // ---- images ----
+  generateImage = (req: ImageRequest) =>
+    this.request<{ data: { id: string; b64_json: string }[]; seed: number }>(
+      "/v1/images/generations",
+      { method: "POST", body: JSON.stringify(req) },
+    );
+  images = () => this.request<GalleryImage[]>("/api/images");
+  deleteImage = (id: string) => this.request<void>(`/api/images/${id}`, { method: "DELETE" });
+  async imageUrl(id: string): Promise<string> {
+    const blob = await (await this.raw(`/api/images/${id}`)).blob();
+    return URL.createObjectURL(blob);
+  }
+
+  // ---- audio ----
+  async transcribe(model: string, audio: Blob, filename: string): Promise<string> {
+    const form = new FormData();
+    form.append("model", model);
+    form.append("file", audio, filename);
+    const body = await this.request<{ text: string }>("/v1/audio/transcriptions", {
+      method: "POST",
+      body: form,
+    });
+    return body.text;
+  }
+  async speak(model: string, input: string, voice?: string, speed = 1): Promise<Blob> {
+    const resp = await this.raw("/v1/audio/speech", {
+      method: "POST",
+      body: JSON.stringify({ model, input, voice, speed, response_format: "wav" }),
+    });
+    return resp.blob();
+  }
+  voices = (model: string) =>
+    this.request<{ voices: string[] }>(`/api/audio/voices?model=${encodeURIComponent(model)}`);
 
   catalog = () => this.request<Catalog>("/api/catalog");
   installed = () => this.request<InstalledModel[]>("/api/models/installed");
@@ -111,7 +172,55 @@ export type ChatMessage = {
   reasoning?: string;
 };
 
-export type Fit = "gpu" | "partial" | "cpu" | "too_large" | "unknown";
+export type Fit = "gpu" | "light" | "partial" | "cpu" | "too_large" | "unknown";
+
+export type Capability = "chat" | "image" | "transcription" | "speech";
+
+export type ModelInfo = {
+  id: string;
+  capability: Capability;
+  name?: string;
+  default_size?: number;
+  negative_prompt?: boolean;
+};
+
+export type Conversation = {
+  id: string;
+  title: string;
+  model: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type ConversationDetail = Conversation & {
+  messages: (ChatMessage & { id: string; reasoning: string | null })[];
+};
+
+export type ImageRequest = {
+  model: string;
+  prompt: string;
+  size?: string;
+  n?: number;
+  negative_prompt?: string;
+  steps?: number;
+  seed?: number;
+};
+
+export type GalleryImage = {
+  id: string;
+  model: string;
+  prompt: string;
+  created_at: number;
+  params: {
+    width: number;
+    height: number;
+    steps: number;
+    guidance: number;
+    seed: number;
+    negative_prompt: string | null;
+    seconds: number | null;
+  };
+};
 
 export type Variant = {
   tag: string;
@@ -132,6 +241,8 @@ export type Family = {
   description: string;
   engine: string;
   engine_available: boolean;
+  engine_installed: boolean;
+  engine_note: string | null;
   use_cases: string[];
   variants: Variant[];
 };

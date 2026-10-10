@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
     "httpx>=0.27",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -33,7 +34,7 @@ select = ["E", "F", "I", "B", "UP", "S"]
 ignore = ["S101"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends"]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

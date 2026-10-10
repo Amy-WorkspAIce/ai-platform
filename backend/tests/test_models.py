@@ -7,8 +7,9 @@ from fastapi.testclient import TestClient
 from app import catalog
 from app.config import Settings
 from app.hardware import Gpu, Hardware, parse_nvidia_smi
+from app.jobs import PullState
 from app.main import create_app
-from app.ollama_admin import PullState, apply_progress, valid_model_name
+from app.ollama_admin import apply_progress, valid_model_name
 
 KEY = "test-key"
 AUTH = {"Authorization": f"Bearer {KEY}"}
@@ -42,7 +43,8 @@ def test_assess_fit(size, hw, fit):
 def test_recommendations_pick_largest_gpu_fit():
     recs = catalog.build(RTX_2080_TI, set())["recommendations"]
     assert recs["chat"][0] == "qwen3:8b"  # 14b needs ~11.7 GB with overhead
-    assert "image" not in recs  # engine not available yet
+    assert recs["image"][0] == "flux2-klein-4b"
+    assert recs["speech"] == ["kokoro-82m"]
     for tags in recs.values():
         assert 1 <= len(tags) <= 3
 
@@ -95,7 +97,7 @@ def test_pull_progress_aggregates_layers():
 def test_pull_error():
     s = PullState("m")
     apply_progress(s, {"error": "pull model manifest: file does not exist"})
-    assert s.done and "does not exist" in s.error
+    assert "does not exist" in s.error
 
 
 WARMED: list[str] = []

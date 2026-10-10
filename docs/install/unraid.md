@@ -37,7 +37,16 @@
    **Install** on one. The first install on a new GPU spends a few extra minutes on
    "Optimizing for your GPU (first run only)" while CUDA compiles kernels for your card.
    This happens once and is cached in appdata.
-4. Back in **Chat**, start talking.
+4. Back in **Chat**, start talking. Your chats are saved in the sidebar.
+
+**Images and audio:** install an image model (e.g. FLUX.2 [klein]) or an audio model
+(Whisper, Kokoro) from **Models**. The first one of each kind also installs its engine
+into appdata: about 7 GB for images (PyTorch) and about 2 GB for audio. This happens once.
+Use the **Images** and **Audio** pages, or the mic and speaker buttons in chat.
+
+> The microphone only works over HTTPS (or on `localhost`), a browser rule. Over plain
+> `http://<server-ip>:8484`, uploading audio files works, and so does reading replies aloud.
+> For dictation, put Amy behind a reverse proxy with HTTPS (e.g. SWAG or Nginx Proxy Manager).
 
 ## Verify the GPU is used
 

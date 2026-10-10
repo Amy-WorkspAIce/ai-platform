@@ -17,6 +17,13 @@ All endpoints except `/health` require `Authorization: Bearer <api key>`.
 | GET | `/v1/models` | Models from every reachable provider, as `provider/model` IDs. |
 | POST | `/v1/chat/completions` | Standard OpenAI chat request. Supports `stream: true` (SSE). The request is forwarded to the provider unchanged, except that `model` is rewritten to the upstream name. |
 
+| POST | `/v1/images/generations` | OpenAI-style image request: `model` (`image/<tag>`), `prompt`, `n`, `size`. Extensions: `negative_prompt`, `steps`, `guidance`, `seed`. Returns `b64_json` images; they are also saved to the gallery. |
+| POST | `/v1/audio/transcriptions` | Multipart upload: `file`, `model` (`audio/whisper-...`), optional `language`, `response_format` (`json`, `text`, `verbose_json`). |
+| POST | `/v1/audio/speech` | `{"model": "audio/kokoro-82m", "input": "...", "voice": "af_heart", "speed": 1.0, "response_format": "wav"}`. Returns audio (`wav`, `flac` or `ogg`). |
+
+`/v1/models` lists chat models plus installed image/audio models. Each entry has a
+`capability`: `chat`, `image`, `transcription` or `speech`.
+
 Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 
 ## Management (`/api`)
@@ -30,6 +37,16 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`. |
 | GET | `/api/models/pulls` | Progress of active and recent downloads (`status`, `completed`, `total`, `done`, `error`). |
 | DELETE | `/api/models/{model}` | Deletes an installed model. |
+| GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model"}`) saved chats. |
+| GET/PATCH/DELETE | `/api/conversations/{id}` | Fetch with messages, rename (`{"title"}`), delete. |
+| POST | `/api/conversations/{id}/messages` | Append `{"role", "content", "reasoning"?, "model"?}`. |
+| GET | `/api/images` | Gallery of generated images (prompt, model, parameters). |
+| GET/DELETE | `/api/images/{id}` | Fetch the PNG, or delete it. |
+| GET | `/api/audio/voices?model=audio/kokoro-82m` | Voices for a text-to-speech model. |
+
+Installing a catalog model that needs an engine (image, audio) also installs that engine
+the first time: a virtualenv in `/data/engines/<engine>` with its Python packages (several
+GB for the image engine because of PyTorch). Job status shows each phase.
 
 After a download finishes, the platform loads the model once and generates a single
 token. On some GPUs, the first run compiles CUDA kernels, which can take minutes. Doing

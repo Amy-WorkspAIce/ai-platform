@@ -35,7 +35,8 @@ The platform **does not implement inference**. It brokers requests to engines.
 │                                ▼ httpx                             │
 │  ollama serve (127.0.0.1:11434, only when AMY_BUNDLED_OLLAMA=true) │
 │                                                                    │
-│ /data  ── secrets/api_key, ollama/models, (future) app.db          │
+│ /data  ── secrets/, amy.db, ollama/models, images/, cache/cuda,    │
+│           engines/<engine>/venv, models/<engine>/<model>           │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -50,20 +51,43 @@ backend/            Python 3.11+ / FastAPI
   app/hardware.py   GPU/RAM/disk detection (nvidia-smi, /proc/meminfo)
   app/catalog/      curated model catalog (catalog.json), fit + recommendations
   app/ollama_admin.py  install (background pulls + GPU warm-up), list, delete
-  app/api/          routers: system (/health, /api), models (/api), openai (/v1)
+  app/jobs.py       background install jobs with pollable progress
+  app/engines/      on-demand engines for images/audio: installer, worker supervisor,
+                    and the worker scripts that run inside each engine's own venv
+  app/db.py         SQLite: conversations, messages, image gallery
+  app/api/          routers: system, models, conversations, media (/api + /v1), openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
-  src/views/        ChatView (chat), ModelsView (discovery + install)
+  src/views/        ChatView, ImagesView, AudioView, ModelsView
 scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
 deploy/unraid/      Community Applications template
 deploy/docker/      compose files (CPU, GPU override, external Ollama)
 ```
 
+## Engines (images, audio)
+
+Ollama only runs language models. For other modalities the platform installs an
+**engine** on demand: the first time a user installs, say, an image model, the
+platform creates `/data/engines/image/venv`, pip-installs PyTorch + diffusers into it, then
+downloads the model to `/data/models/image/<model>`. Engines run as **worker
+subprocesses** (stdlib HTTP on 127.0.0.1) that start on the first request and stop
+after `AMY_ENGINE_IDLE_MINUTES` idle, freeing GPU memory. Before generating an image,
+the platform asks Ollama to unload its models so the image pipeline gets the VRAM.
+
+| Engine | Packages | Models |
+|---|---|---|
+| `image` | torch, diffusers, transformers, accelerate | FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5 |
+| `audio` | faster-whisper (+ cuBLAS/cuDNN on GPU), kokoro-onnx | Whisper, Kokoro |
+
+Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU, per-component
+CPU offload, or sequential offload for small cards.
+
 ## Model IDs
 
 Models are exposed as `<provider>/<upstream-name>`, for example `ollama/llama3.2` or
 `vllm/meta-llama/Llama-3.1-8B-Instruct`. Only the first `/` separates the two parts.
+Engine models use the engine as the prefix: `image/flux2-klein-4b`, `audio/kokoro-82m`.
 
 ## Design rules
 

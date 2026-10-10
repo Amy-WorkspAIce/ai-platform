@@ -31,9 +31,14 @@
       "description": "Creates images from text prompts."
     },
     {
-      "id": "audio",
-      "name": "Audio",
-      "description": "Speech-to-text and text-to-speech."
+      "id": "transcription",
+      "name": "Speech to text",
+      "description": "Transcribes recordings and dictation into text."
+    },
+    {
+      "id": "speech",
+      "name": "Text to speech",
+      "description": "Reads text aloud in a natural voice."
     }
   ],
   "engines": [
@@ -44,15 +49,17 @@
     },
     {
       "id": "image",
-      "name": "Image engine",
-      "available": false,
-      "note": "Image generation engine support is planned."
+      "name": "Image engine (diffusers + PyTorch)",
+      "available": true,
+      "install_size_gb": 7,
+      "note": "Installed automatically with your first image model (about 7 GB, one time)."
     },
     {
       "id": "audio",
-      "name": "Audio engine",
-      "available": false,
-      "note": "Speech engine support is planned."
+      "name": "Audio engine (faster-whisper + Kokoro)",
+      "available": true,
+      "install_size_gb": 2,
+      "note": "Installed automatically with your first audio model (about 2 GB with GPU libraries, one time)."
     }
   ],
   "families": [
@@ -410,20 +417,45 @@
       ]
     },
     {
-      "id": "flux-schnell",
-      "name": "FLUX.1 [schnell]",
+      "id": "flux2-klein",
+      "name": "FLUX.2 [klein]",
       "publisher": "Black Forest Labs",
       "license": "Apache-2.0",
       "engine": "image",
       "use_cases": [
         "image"
       ],
-      "description": "Fast, high-quality text-to-image.",
+      "description": "High-quality images in just 4 steps. Best all-round choice for 10 GB+ GPUs.",
       "variants": [
         {
-          "tag": "flux.1-schnell",
-          "params": "12B",
-          "size_gb": 12
+          "tag": "flux2-klein-4b",
+          "params": "4B",
+          "size_gb": 15.98,
+          "vram_gb": 10,
+          "ram_gb": 20,
+          "min_vram_gb": 6,
+          "engine_config": {
+            "source": {
+              "type": "hf",
+              "repo": "black-forest-labs/FLUX.2-klein-4B",
+              "allow_patterns": [
+                "model_index.json",
+                "scheduler/*",
+                "text_encoder/*",
+                "tokenizer/*",
+                "transformer/*",
+                "vae/*"
+              ]
+            },
+            "dtype": "bfloat16",
+            "full_gb": 16,
+            "component_gb": 8.1,
+            "steps": 4,
+            "guidance": 1.0,
+            "size": 1024,
+            "negative_prompt": false,
+            "fp16_ok": true
+          }
         }
       ]
     },
@@ -436,48 +468,208 @@
       "use_cases": [
         "image"
       ],
-      "description": "Classic text-to-image model with a huge ecosystem of styles.",
+      "description": "Versatile classic with a huge ecosystem of styles. Supports negative prompts.",
       "variants": [
         {
           "tag": "sdxl-base-1.0",
           "params": "3.5B",
-          "size_gb": 7
+          "size_gb": 6.95,
+          "vram_gb": 8.5,
+          "ram_gb": 12,
+          "min_vram_gb": 4,
+          "engine_config": {
+            "source": {
+              "type": "hf",
+              "repo": "stabilityai/stable-diffusion-xl-base-1.0",
+              "allow_patterns": [
+                "model_index.json",
+                "scheduler/*",
+                "tokenizer/*",
+                "tokenizer_2/*",
+                "text_encoder/config.json",
+                "text_encoder/model.fp16.safetensors",
+                "text_encoder_2/config.json",
+                "text_encoder_2/model.fp16.safetensors",
+                "unet/config.json",
+                "unet/diffusion_pytorch_model.fp16.safetensors",
+                "vae/config.json",
+                "vae/diffusion_pytorch_model.fp16.safetensors"
+              ]
+            },
+            "variant": "fp16",
+            "dtype": "float16",
+            "full_gb": 7,
+            "component_gb": 5.2,
+            "steps": 30,
+            "guidance": 6.0,
+            "size": 1024,
+            "negative_prompt": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "z-image",
+      "name": "Z-Image Turbo",
+      "publisher": "Tongyi-MAI (Alibaba)",
+      "license": "Apache-2.0",
+      "engine": "image",
+      "use_cases": [
+        "image"
+      ],
+      "description": "Photorealistic images with excellent text rendering. Needs a large GPU.",
+      "variants": [
+        {
+          "tag": "z-image-turbo",
+          "params": "6B",
+          "size_gb": 32.85,
+          "vram_gb": 14,
+          "ram_gb": 32,
+          "min_vram_gb": 8,
+          "engine_config": {
+            "source": {
+              "type": "hf",
+              "repo": "Tongyi-MAI/Z-Image-Turbo",
+              "allow_patterns": [
+                "model_index.json",
+                "scheduler/*",
+                "text_encoder/*",
+                "tokenizer/*",
+                "transformer/*",
+                "vae/*"
+              ]
+            },
+            "dtype": "bfloat16",
+            "full_gb": 21,
+            "component_gb": 12.5,
+            "steps": 9,
+            "guidance": 0.0,
+            "size": 1024,
+            "negative_prompt": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "sd15",
+      "name": "Stable Diffusion 1.5",
+      "publisher": "Runway / Stability AI",
+      "license": "CreativeML Open RAIL-M",
+      "engine": "image",
+      "use_cases": [
+        "image"
+      ],
+      "description": "Small and fast. Runs on modest GPUs, and even (slowly) on a CPU.",
+      "variants": [
+        {
+          "tag": "sd15",
+          "params": "1B",
+          "size_gb": 2.13,
+          "vram_gb": 4,
+          "ram_gb": 8,
+          "min_vram_gb": 2,
+          "engine_config": {
+            "source": {
+              "type": "hf",
+              "repo": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+              "allow_patterns": [
+                "model_index.json",
+                "scheduler/*",
+                "tokenizer/*",
+                "feature_extractor/*",
+                "text_encoder/config.json",
+                "text_encoder/model.fp16.safetensors",
+                "unet/config.json",
+                "unet/diffusion_pytorch_model.fp16.safetensors",
+                "vae/config.json",
+                "vae/diffusion_pytorch_model.fp16.safetensors"
+              ]
+            },
+            "variant": "fp16",
+            "dtype": "float16",
+            "full_gb": 2.2,
+            "component_gb": 1.7,
+            "steps": 25,
+            "guidance": 7.5,
+            "size": 512,
+            "negative_prompt": true,
+            "load_kwargs": {
+              "safety_checker": null,
+              "requires_safety_checker": false
+            }
+          }
         }
       ]
     },
     {
       "id": "whisper",
-      "name": "Whisper large-v3-turbo",
+      "name": "Whisper",
       "publisher": "OpenAI",
       "license": "MIT",
       "engine": "audio",
       "use_cases": [
-        "audio"
+        "transcription"
       ],
-      "description": "Speech-to-text transcription in many languages.",
+      "description": "Accurate transcription in ~100 languages (faster-whisper).",
       "variants": [
         {
           "tag": "whisper-large-v3-turbo",
           "params": "809M",
-          "size_gb": 1.6
+          "size_gb": 1.62,
+          "vram_gb": 2.5,
+          "ram_gb": 4,
+          "min_vram_gb": 2,
+          "engine_config": {
+            "task": "transcription",
+            "source": {
+              "type": "hf",
+              "repo": "dropbox-dash/faster-whisper-large-v3-turbo"
+            }
+          }
+        },
+        {
+          "tag": "whisper-small",
+          "params": "244M",
+          "size_gb": 0.49,
+          "vram_gb": 1.5,
+          "ram_gb": 2,
+          "min_vram_gb": 1,
+          "engine_config": {
+            "task": "transcription",
+            "source": {
+              "type": "hf",
+              "repo": "Systran/faster-whisper-small"
+            }
+          }
         }
       ]
     },
     {
       "id": "kokoro",
-      "name": "Kokoro TTS",
+      "name": "Kokoro",
       "publisher": "hexgrad",
       "license": "Apache-2.0",
       "engine": "audio",
       "use_cases": [
-        "audio"
+        "speech"
       ],
-      "description": "Small, natural-sounding text-to-speech.",
+      "description": "Small, natural-sounding text-to-speech with dozens of voices. Runs on the CPU.",
       "variants": [
         {
           "tag": "kokoro-82m",
           "params": "82M",
-          "size_gb": 0.33
+          "size_gb": 0.35,
+          "runs_on": "cpu",
+          "engine_config": {
+            "task": "speech",
+            "source": {
+              "type": "urls",
+              "files": {
+                "kokoro-v1.0.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
+                "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+              }
+            }
+          }
         }
       ]
     }
