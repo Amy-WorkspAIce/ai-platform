@@ -281,6 +281,7 @@ function FamilyCard({
           {family.use_cases.map((u) => (
             <span key={u} className="tag">{names[u] ?? u}</span>
           ))}
+          {family.tools && <span className="tag tools" title="Can use web search and agent mode">Tools</span>}
           {!family.engine_available && <span className="tag soon">Coming soon</span>}
         </div>
       </div>

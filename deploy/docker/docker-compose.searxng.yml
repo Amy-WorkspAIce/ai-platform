@@ -1,0 +1,20 @@
+# Optional: self-hosted SearXNG for web search (better than the DuckDuckGo fallback).
+# Use together with the main compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.searxng.yml up -d
+#
+services:
+  ai-platform:
+    environment:
+      AMY_SEARXNG_URL: http://searxng:8080
+    depends_on:
+      - searxng
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: amy-searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-please-change-me}
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro

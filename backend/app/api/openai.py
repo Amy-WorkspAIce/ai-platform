@@ -33,6 +33,7 @@ async def list_models(request: Request) -> dict:
             "created": now,
             "owned_by": p.name,
             "capability": "chat",
+            "tools": supports_tools(p.kind, m),
         }
         for p, models in zip(providers, results, strict=True)
         for m in models
@@ -98,3 +99,11 @@ def image_options(cfg: dict) -> dict:
     if "size" not in cfg:
         return {}
     return {"default_size": cfg["size"], "negative_prompt": cfg.get("negative_prompt", False)}
+
+
+def supports_tools(provider_kind: str, model: str) -> bool | None:
+    """Whether a chat model can call tools, if the catalog knows (None = unknown)."""
+    if provider_kind != "ollama":
+        return None
+    found = catalog.find_variant(model)
+    return bool(found[0].get("tools")) if found else None

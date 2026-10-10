@@ -54,8 +54,11 @@ backend/            Python 3.11+ / FastAPI
   app/jobs.py       background install jobs with pollable progress
   app/engines/      on-demand engines for images/audio: installer, worker supervisor,
                     and the worker scripts that run inside each engine's own venv
-  app/db.py         SQLite: conversations, messages, image gallery
-  app/api/          routers: system, models, conversations, media (/api + /v1), openai (/v1)
+  app/db.py         SQLite: conversations, messages (incl. tool calls), image gallery
+  app/agent.py      tool-calling loop, approvals, streaming events
+  app/tools/        web (search providers, page fetch with LAN blocking), workspace
+                    (confined file tools, shell commands with scrubbed env)
+  app/api/          routers: system, models, conversations, agent, media, openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
   src/views/        ChatView, ImagesView, AudioView, ModelsView

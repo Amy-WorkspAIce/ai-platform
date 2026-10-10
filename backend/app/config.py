@@ -49,6 +49,20 @@ class Settings(BaseSettings):
     # Stop idle image/audio engine workers after this many minutes, freeing their memory.
     engine_idle_minutes: float = 10
 
+    # Web access for tool-using chats. search_provider: auto | searxng | brave | duckduckgo.
+    search_provider: str = "auto"
+    searxng_url: str | None = None
+    brave_api_key: str | None = None
+    # Allow fetch_url to reach private/LAN addresses (off: protects your network from
+    # pages that try to steer the model into probing it).
+    web_allow_private: bool = False
+
+    # Agent mode.
+    agent_max_steps: int = 40
+    agent_command_timeout: float = 600
+    # GitHub token made available to agent git commands (clone/push private repos).
+    github_token: str | None = None
+
     # Timeout for upstream model requests, in seconds. Generation can be slow on big models.
     upstream_timeout: float = 600.0
 

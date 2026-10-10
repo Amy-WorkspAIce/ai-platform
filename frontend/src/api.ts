@@ -82,6 +82,43 @@ export class Api {
       body: JSON.stringify(message),
     });
 
+  // ---- agent / tools ----
+  /** Stream a tool-using chat (web access and/or agent mode) as server-sent events. */
+  async agentChat(req: AgentRequest, onEvent: (e: AgentEvent) => void, signal?: AbortSignal) {
+    const resp = await this.raw("/api/agent/chat", {
+      method: "POST",
+      body: JSON.stringify(req),
+      signal,
+    });
+    if (!resp.body) throw new Error("No response body");
+    const reader = resp.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        if (line) onEvent(JSON.parse(line.slice(6)) as AgentEvent);
+      }
+    }
+  }
+  approve = (runId: string, callId: string, approve: boolean, always = false) =>
+    this.request<{ ok: boolean }>(`/api/agent/runs/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ call_id: callId, approve, always }),
+    });
+  workspaces = () => this.request<WorkspaceInfo[]>("/api/workspaces");
+  createWorkspace = (name: string, git_url?: string) =>
+    this.request<{ name: string }>("/api/workspaces", {
+      method: "POST",
+      body: JSON.stringify({ name, git_url: git_url || undefined }),
+    });
+  deleteWorkspace = (name: string) =>
+    this.request<void>(`/api/workspaces/${encodeURIComponent(name)}`, { method: "DELETE" });
+
   // ---- images ----
   generateImage = (req: ImageRequest) =>
     this.request<{ data: { id: string; b64_json: string }[]; seed: number }>(
@@ -179,21 +216,67 @@ export type Capability = "chat" | "image" | "transcription" | "speech";
 export type ModelInfo = {
   id: string;
   capability: Capability;
+  tools?: boolean | null;
   name?: string;
   default_size?: number;
   negative_prompt?: boolean;
 };
 
+export type ChatSettings = { mode?: "chat" | "agent"; web?: boolean; workspace?: string | null };
+
 export type Conversation = {
   id: string;
   title: string;
   model: string | null;
+  settings: ChatSettings;
   created_at: number;
   updated_at: number;
 };
 
-export type ConversationDetail = Conversation & {
-  messages: (ChatMessage & { id: string; reasoning: string | null })[];
+export type StoredMessage = {
+  id: string;
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  reasoning: string | null;
+  meta: {
+    tool_calls?: { id: string; function: { name: string; arguments: string } }[];
+    tool_call_id?: string;
+    name?: string;
+    ok?: boolean;
+  } | null;
+};
+
+export type ConversationDetail = Conversation & { messages: StoredMessage[] };
+
+export type AgentRequest = {
+  model: string;
+  message: string;
+  conversation_id?: string | null;
+  mode: "chat" | "agent";
+  web: boolean;
+  workspace?: string | null;
+  auto_approve: boolean;
+};
+
+export type AgentEvent =
+  | { type: "start"; run_id: string; conversation_id: string }
+  | { type: "text" | "reasoning"; delta: string }
+  | {
+      type: "tool_call";
+      id: string;
+      name: string;
+      arguments: Record<string, unknown> | string;
+      summary: string;
+      needs_approval: boolean;
+    }
+  | { type: "tool_result"; id: string; ok: boolean; output: string }
+  | { type: "error"; message: string }
+  | { type: "done" };
+
+export type WorkspaceInfo = {
+  name: string;
+  modified: number;
+  git: { branch: string | null; remote: string | null; changes: number } | null;
 };
 
 export type ImageRequest = {
@@ -242,6 +325,7 @@ export type Family = {
   engine: string;
   engine_available: boolean;
   engine_installed: boolean;
+  tools?: boolean;
   engine_note: string | null;
   use_cases: string[];
   variants: Variant[];

@@ -1,0 +1,9 @@
+# Minimal SearXNG config for Amy. The important part: JSON output must be enabled.
+use_default_settings: true
+server:
+  limiter: false        # Amy is the only client; no rate limiting needed
+  image_proxy: false
+search:
+  formats:
+    - html
+    - json

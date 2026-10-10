@@ -44,6 +44,16 @@
 into appdata: about 7 GB for images (PyTorch) and about 2 GB for audio. This happens once.
 Use the **Images** and **Audio** pages, or the mic and speaker buttons in chat.
 
+**Web search:** works out of the box via DuckDuckGo. For better results install
+**SearXNG** from Community Apps, add `json` under `search.formats` in
+`/mnt/user/appdata/searxng/settings.yml`, restart it, and put its URL
+(`http://<server-ip>:<port>`) in Amy's **SearXNG URL** field.
+
+**Agent mode:** pick a model tagged *Tools* (Qwen 3 8B is a good start on 11 GB cards),
+switch the chat to **Agent** and create a workspace. To let it work on private GitHub repos
+and push, set **GitHub token** (Advanced View) to a fine-grained token. See
+[agent-and-web.md](../agent-and-web.md).
+
 > The microphone only works over HTTPS (or on `localhost`), a browser rule. Over plain
 > `http://<server-ip>:8484`, uploading audio files works, and so does reading replies aloud.
 > For dictation, put Amy behind a reverse proxy with HTTPS (e.g. SWAG or Nginx Proxy Manager).

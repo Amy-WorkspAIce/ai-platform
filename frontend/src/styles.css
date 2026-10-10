@@ -273,3 +273,37 @@ a.button.secondary { background: var(--surface-2); }
 .audio-result audio { flex: 1; min-width: 220px; }
 .sidebar-footer { display: flex; justify-content: space-between; align-items: center; }
 .version { font-size: 0.75rem; color: var(--muted); padding-right: 0.25rem; }
+
+/* ---- tools, agent ---- */
+.composer-wrap { display: flex; flex-direction: column; gap: 0.45rem; width: 100%; }
+.welcome .composer-wrap { width: min(100%, 760px); }
+.chat-toolbar { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
+.segmented.small button { padding: 0.3rem 0.75rem; font-size: 0.85rem; }
+.chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+.chat-toolbar .chip { padding: 0.3rem 0.75rem; font-size: 0.85rem; }
+.auto-approve { display: flex; align-items: center; gap: 0.3rem; color: var(--muted); font-size: 0.85rem; }
+.warn { color: var(--warn); }
+.tag.tools { background: var(--ok-bg); color: var(--ok); }
+.workspace-picker { position: relative; }
+.workspace-picker select { padding: 0.3rem 0.6rem; font-size: 0.85rem; max-width: 260px; }
+.workspace-form {
+  position: absolute; bottom: calc(100% + 0.4rem); left: 0; z-index: 15; width: min(420px, 90vw);
+  display: flex; flex-direction: column; gap: 0.5rem; box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+}
+.tool-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 0.88rem; }
+.tool-card.awaiting { border-color: var(--warn); }
+.tool-card summary { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; cursor: pointer; min-width: 0; }
+.tool-label { color: var(--muted); white-space: nowrap; }
+.tool-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tool-waiting { margin-left: auto; color: var(--warn); font-size: 0.8rem; white-space: nowrap; }
+.tool-status { width: 0.55rem; height: 0.55rem; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
+.tool-status.ok { background: var(--ok); }
+.tool-status.error { background: var(--error); }
+.tool-status.awaiting { background: var(--warn); }
+.tool-status.running { background: var(--accent); animation: pulse 1s infinite; }
+.tool-output, .tool-preview {
+  margin: 0 0.75rem 0.6rem; padding: 0.6rem 0.75rem; background: var(--surface-2); border-radius: 8px;
+  max-height: 22rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.8rem;
+}
+.tool-preview { border-left: 3px solid var(--warn); }
+.tool-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; padding: 0 0.75rem 0.6rem; }

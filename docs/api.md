@@ -43,6 +43,10 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/images` | Gallery of generated images (prompt, model, parameters). |
 | GET/DELETE | `/api/images/{id}` | Fetch the PNG, or delete it. |
 | GET | `/api/audio/voices?model=audio/kokoro-82m` | Voices for a text-to-speech model. |
+| POST | `/api/agent/chat` | Tool-using chat. Body: `model`, `message`, `conversation_id?`, `mode` (`chat` or `agent`), `web` (bool), `workspace?`, `auto_approve`. Streams server-sent events: `start`, `text`, `reasoning`, `tool_call`, `tool_result`, `error`, `done`. Saves the conversation, including tool calls. |
+| POST | `/api/agent/runs/{run_id}/approve` | `{"call_id", "approve", "always"}`: answer a pending approval. |
+| GET/POST | `/api/workspaces` | List workspaces (with git branch/changes) or create one: `{"name", "git_url"?}`. |
+| DELETE | `/api/workspaces/{name}` | Delete a workspace and its files. |
 
 Installing a catalog model that needs an engine (image, audio) also installs that engine
 the first time: a virtualenv in `/data/engines/<engine>` with its Python packages (several

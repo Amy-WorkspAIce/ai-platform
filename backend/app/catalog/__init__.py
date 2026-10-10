@@ -17,10 +17,10 @@ from app.hardware import Hardware
 
 Fit = Literal["gpu", "light", "partial", "cpu", "too_large", "unknown"]
 
-# Runtime memory beyond the weights: KV cache for a few thousand tokens of context,
-# CUDA buffers, etc. Deliberately a little pessimistic.
+# Runtime memory beyond the weights: KV cache for a 16k context (q8_0), CUDA buffers,
+# etc. Deliberately a little pessimistic.
 OVERHEAD_FACTOR = 1.15
-OVERHEAD_GB = 1.0
+OVERHEAD_GB = 1.5
 # Fraction of system RAM we're willing to count on for model weights.
 RAM_BUDGET = 0.6
 # On CPU-only machines, recommend only models small enough to be pleasant to use.

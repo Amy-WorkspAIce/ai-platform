@@ -43,6 +43,13 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+# Columns added after the first release: (table, column, definition).
+MIGRATIONS = [
+    ("messages", "meta", "TEXT"),  # tool calls, tool results (JSON)
+    ("conversations", "settings", "TEXT"),  # mode, workspace, web (JSON)
+]
+
+
 class Database:
     def __init__(self, path: Path):
         self.path = path
@@ -50,6 +57,10 @@ class Database:
         with self.connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            for table, column, definition in MIGRATIONS:
+                cols = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
+                if column not in cols:
+                    db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     @contextmanager
     def connect(self):
@@ -69,9 +80,11 @@ class Database:
             rows = db.execute(
                 "SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?", (limit,)
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_conv(r) for r in rows]
 
-    def create_conversation(self, title: str, model: str | None) -> dict:
+    def create_conversation(
+        self, title: str, model: str | None, settings: dict | None = None
+    ) -> dict:
         now = time.time()
         conv = {
             "id": new_id(),
@@ -79,13 +92,15 @@ class Database:
             "model": model,
             "created_at": now,
             "updated_at": now,
+            "settings": json.dumps(settings or {}),
         }
         with self.connect() as db:
             db.execute(
-                "INSERT INTO conversations VALUES (:id, :title, :model, :created_at, :updated_at)",
+                "INSERT INTO conversations (id, title, model, created_at, updated_at, settings) "
+                "VALUES (:id, :title, :model, :created_at, :updated_at, :settings)",
                 conv,
             )
-        return conv
+        return conv | {"settings": settings or {}}
 
     def get_conversation(self, conv_id: str) -> dict | None:
         with self.connect() as db:
@@ -96,10 +111,14 @@ class Database:
                 "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid",
                 (conv_id,),
             ).fetchall()
-        return dict(row) | {"messages": [dict(m) for m in messages]}
+        return _conv(row) | {"messages": [_msg(m) for m in messages]}
 
     def update_conversation(self, conv_id: str, **fields) -> dict | None:
-        allowed = {k: v for k, v in fields.items() if k in ("title", "model") and v is not None}
+        allowed = {
+            k: v for k, v in fields.items() if k in ("title", "model", "settings") and v is not None
+        }
+        if "settings" in allowed:
+            allowed["settings"] = json.dumps(allowed["settings"])
         if allowed:
             sets = ", ".join(f"{k} = :{k}" for k in allowed)
             with self.connect() as db:
@@ -120,6 +139,7 @@ class Database:
         content: str,
         reasoning: str | None = None,
         model: str | None = None,
+        meta: dict | None = None,
     ) -> dict | None:
         now = time.time()
         msg = {
@@ -130,17 +150,19 @@ class Database:
             "reasoning": reasoning or None,
             "model": model,
             "created_at": now,
+            "meta": json.dumps(meta) if meta else None,
         }
         with self.connect() as db:
             if not db.execute("SELECT 1 FROM conversations WHERE id = ?", (conv_id,)).fetchone():
                 return None
             db.execute(
-                "INSERT INTO messages VALUES "
-                "(:id, :conversation_id, :role, :content, :reasoning, :model, :created_at)",
+                "INSERT INTO messages (id, conversation_id, role, content, reasoning, model, "
+                "created_at, meta) VALUES (:id, :conversation_id, :role, :content, :reasoning, "
+                ":model, :created_at, :meta)",
                 msg,
             )
             db.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conv_id))
-        return msg
+        return msg | {"meta": meta}
 
     # ---- images ----
 
@@ -168,3 +190,15 @@ class Database:
     def delete_image(self, image_id: str) -> bool:
         with self.connect() as db:
             return db.execute("DELETE FROM images WHERE id = ?", (image_id,)).rowcount > 0
+
+
+def _conv(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    d["settings"] = json.loads(d.get("settings") or "{}")
+    return d
+
+
+def _msg(row: sqlite3.Row) -> dict:
+    d = dict(row)
+    d["meta"] = json.loads(d["meta"]) if d.get("meta") else None
+    return d

@@ -9,9 +9,10 @@ Each app is its own container. The AI Platform is the AI service your other apps
 call, and it can act on those apps through their APIs.
 
 > **Status: early development.** Working today: a ChatGPT-style chat with saved history,
-> image generation, speech-to-text and text-to-speech, hardware-aware model discovery with
-> one-click installs, a multi-provider OpenAI-compatible API, bundled Ollama with NVIDIA
-> GPU support, and API-key auth. See [Roadmap](#roadmap).
+> web access, an agent mode that edits code and runs commands, image generation,
+> speech-to-text and text-to-speech, hardware-aware model discovery with one-click installs,
+> a multi-provider OpenAI-compatible API, bundled Ollama with NVIDIA GPU support, and
+> API-key auth. See [Roadmap](#roadmap).
 
 ## Features
 
@@ -23,6 +24,11 @@ call, and it can act on those apps through their APIs.
   GGUF model can be installed by name.
 - **ChatGPT-style chat** with saved conversations, streaming, markdown, collapsible
   "thinking" for reasoning models, dictation and read-aloud.
+- **Web access**: the model can search (SearXNG, Brave, or DuckDuckGo with zero setup)
+  and read pages, citing its sources.
+- **Agent mode**: describe a feature and Amy works on it in a workspace (an empty folder
+  or a cloned git repo). It reads code, edits files and runs tests and builds, asking your
+  approval before each change or command.
 - **Image generation** (FLUX.2 klein, Stable Diffusion XL, Z-Image Turbo, SD 1.5) with a
   gallery, and **audio**: transcription (Whisper) and text-to-speech (Kokoro). The engines
   these need (PyTorch/diffusers, faster-whisper, ONNX) install themselves into `/data` the
@@ -83,6 +89,7 @@ print(reply.choices[0].message.content)
 - [Architecture](docs/architecture.md)
 - [Configuration reference](docs/configuration.md)
 - [API](docs/api.md)
+- [Agent mode and web access](docs/agent-and-web.md)
 - [Connectors: how other apps plug in](docs/connectors.md)
 - [Development](docs/development.md)
 
@@ -94,6 +101,8 @@ print(reply.choices[0].message.content)
 - [x] Hardware-aware model discovery, one-click install with progress, delete
 - [x] Saved conversation history (sidebar chat list)
 - [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
+- [x] Web access (search + page reading) and agent mode with approvals
+- [ ] Sandbox container for agent commands
 - [ ] Provider management in the UI
 - [ ] Multiple API keys and users
 - [ ] Customization: personas/system prompts, themes, plugins

@@ -10,7 +10,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__, hardware
-from app.api import conversations, media, models, openai, system
+from app.agent import RunRegistry
+from app.api import agent, conversations, media, models, openai, system
 from app.config import Settings, get_settings
 from app.db import Database
 from app.engines import EngineManager
@@ -42,6 +43,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.providers = ProviderRegistry.from_settings(settings)
     app.state.ollama_admin = None
     app.state.jobs = JobRegistry()
+    app.state.agent_runs = RunRegistry()
     app.state.db = Database(settings.data_dir / "amy.db")
     app.state.engines = EngineManager(
         settings.data_dir,
@@ -63,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system.router)
     app.include_router(models.router)
     app.include_router(conversations.router)
+    app.include_router(agent.router)
     app.include_router(media.api)
     app.include_router(media.v1)
     app.include_router(openai.router)

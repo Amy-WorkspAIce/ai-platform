@@ -26,10 +26,11 @@ class ConversationUpdate(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
     reasoning: str | None = None
     model: str | None = None
+    meta: dict | None = None
 
 
 @router.get("")
@@ -68,7 +69,7 @@ def delete_conversation(conv_id: str, db: Database = Depends(get_db)) -> None:
 
 @router.post("/{conv_id}/messages", status_code=201)
 def add_message(conv_id: str, body: MessageCreate, db: Database = Depends(get_db)) -> dict:
-    msg = db.add_message(conv_id, body.role, body.content, body.reasoning, body.model)
+    msg = db.add_message(conv_id, body.role, body.content, body.reasoning, body.model, body.meta)
     if msg is None:
         raise HTTPException(404, "Conversation not found")
     return msg

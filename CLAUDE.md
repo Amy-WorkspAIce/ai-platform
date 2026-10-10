@@ -18,4 +18,7 @@ plus web UI) packaged as a single container, Unraid-first but portable.
 - Image/audio engines live in `backend/app/engines/`. Worker scripts (`*_worker.py`,
   `_worker_common.py`) run inside the engine's own venv: **stdlib only at import time**, never
   import from `app.*` there. Bump `EngineSpec.version` when changing an engine's packages.
+- Agent/web tools: `backend/app/tools/`, loop in `backend/app/agent.py`. Any new mutating tool
+  must set `mutating=True` (requires approval). Keep workspace path confinement and the secret
+  scrubbing in `Workspace.env()` intact.
 - License is AGPL-3.0; only add dependencies with compatible licenses.
