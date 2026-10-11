@@ -64,12 +64,22 @@ backend/            Python 3.11+ / FastAPI
   app/api/          routers: system, models, conversations, agent, media, openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
-  src/views/        ChatView, ImagesView, VideoView, AudioView, ModelsView, SettingsView
+  src/views/        ChatView, LibraryView, ModelsView, SettingsView (media.tsx: inline media)
 scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
 deploy/unraid/      Community Applications template
 deploy/docker/      compose files (CPU, GPU override, external Ollama)
 ```
+
+## Chat as the orchestrator
+
+There is one interface: the chat. The chat model (any tool-capable LLM) delegates work to
+specialist models through tools (`app/tools/creative.py`): image generation and editing,
+video, speech, and web search. `app/delegation.py` picks the model for each kind of task
+(Settings pin, else best installed by the Perfect-match ranking); `app/studio.py` holds the
+operations shared with the `/v1` API. Results come back as attachments shown inline and saved
+to the Library. GPU sharing: media jobs unload Ollama models first; afterwards a fully-on-GPU
+pipeline is "parked" in RAM so the chat model can reload.
 
 ## Engines (images, audio)
 

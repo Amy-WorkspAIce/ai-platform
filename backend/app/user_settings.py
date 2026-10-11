@@ -27,7 +27,43 @@ class HuggingFaceAuth:
 class UserSettings:
     def __init__(self, data_dir: Path, env_hf_token: str | None = None):
         self._hf_file = data_dir / "secrets" / "huggingface.json"
+        self._prefs_file = data_dir / "settings.json"
         self._env_hf_token = env_hf_token
+
+    # ---- preferences (non-secret) ----
+
+    def _prefs(self) -> dict:
+        try:
+            return json.loads(self._prefs_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _save_prefs(self, prefs: dict) -> None:
+        self._prefs_file.parent.mkdir(parents=True, exist_ok=True)
+        self._prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+
+    def model_defaults(self) -> dict[str, str]:
+        """Pinned model per capability; missing means "best installed"."""
+        return dict(self._prefs().get("models") or {})
+
+    def set_model_default(self, capability: str, model: str | None) -> None:
+        prefs = self._prefs()
+        models = dict(prefs.get("models") or {})
+        if model:
+            models[capability] = model
+        else:
+            models.pop(capability, None)
+        prefs["models"] = models
+        self._save_prefs(prefs)
+
+    @property
+    def web_access(self) -> bool:
+        return bool(self._prefs().get("web_access", True))
+
+    def set_web_access(self, enabled: bool) -> None:
+        prefs = self._prefs()
+        prefs["web_access"] = enabled
+        self._save_prefs(prefs)
 
     # ---- Hugging Face ----
 

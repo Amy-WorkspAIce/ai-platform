@@ -6,9 +6,32 @@ supports tools. They're tagged **Tools** on the Models page (Qwen 3, gpt-oss, Qw
 Llama 3.x, Mistral Small). Bigger is better: an 8B model handles straightforward tasks
 well, and a 1–2B model gets lost quickly.
 
+## Delegation: images, video, voice
+
+Chat is the single interface. When a media model is installed, the chat model gets tools to
+delegate to it:
+
+| Tool | What it does |
+|---|---|
+| `generate_image` | Writes a detailed prompt and creates an image (shown inline, saved to the Library). |
+| `edit_image` | Changes an existing image ("make it nighttime"). Uses true editing on models that accept an input image (FLUX.2 klein); otherwise regenerates with an adjusted prompt and the same seed. Works on images you attach too. |
+| `generate_video` | Starts a background video job; a progress card in the chat turns into the clip. |
+| `speak` | Text-to-speech (saved to the Library). |
+
+Which model does the work: the one pinned in **Settings → Models**, otherwise the **best
+installed** for your hardware (Perfect-match ranking). Asking for one by name ("use SDXL")
+works too. Before a media job the chat model is unloaded from the GPU, and a fully-on-GPU
+image pipeline is moved back to RAM afterwards, so the two take turns on the card.
+
+Attach files with 📎: images become part of your message (so the model can edit them), audio
+files are transcribed into it.
+
+Models that can't call tools still chat normally; Amy notices and retries without tools.
+
 ## Web access
 
-Turn on **🌐 Web** in the chat toolbar. The model gets two tools:
+On by default (**Settings → Web access**). The model gets two tools and uses them when a
+question needs current information:
 
 | Tool | What it does |
 |---|---|

@@ -24,6 +24,8 @@ _lock = threading.Lock()
 _pipe = None
 _pipe_key: str | None = None
 _placement = "none"
+# True when a fully-on-GPU pipeline was moved to RAM to give the chat model the GPU back.
+_parked = False
 # Progress of the current generation, readable while it runs (GET /progress).
 _progress: dict = {"phase": "idle", "step": 0, "steps": 0}
 
@@ -147,8 +149,13 @@ def _place(torch, pipe, cfg: dict) -> str:
 
 
 def _load(model_dir: str, cfg: dict):
-    global _pipe, _pipe_key, _placement
+    global _pipe, _pipe_key, _placement, _parked
     if _pipe_key == model_dir:
+        if _parked:
+            import torch
+
+            _placement = _place(torch, _pipe, cfg)
+            _parked = False
         return _pipe
 
     import torch
@@ -225,8 +232,15 @@ def generate(body: dict) -> common.Response:
             loaded = time.time()
             seed = _seed(body)
             call = _call_args(pipe, body, cfg, seed)
-            if "num_images_per_prompt" in inspect.signature(pipe.__call__).parameters:
+            params = inspect.signature(pipe.__call__).parameters
+            if "num_images_per_prompt" in params:
                 call["num_images_per_prompt"] = body.get("n", 1)
+            used_image = False
+            if body.get("init_image") and "image" in params:
+                from PIL import Image
+
+                call["image"] = Image.open(body["init_image"]).convert("RGB")
+                used_image = True
             _progress["phase"] = "generating"
             images = pipe(**call).images
         finally:
@@ -241,6 +255,7 @@ def generate(body: dict) -> common.Response:
         {
             "images": encoded,
             "seed": seed,
+            "edited": used_image,
             "placement": _placement,
             "load_seconds": round(loaded - started, 1),
             "generate_seconds": round(time.time() - loaded, 1),
@@ -292,8 +307,41 @@ def progress(_body: dict) -> common.Response:
     return common.json_response(dict(_progress))
 
 
+def supports_image(body: dict) -> common.Response:
+    """Does this model's pipeline accept an input image (i.e. can it edit)? No weights loaded."""
+    import json
+    from pathlib import Path
+
+    import diffusers
+
+    name = json.loads((Path(body["model_dir"]) / "model_index.json").read_text())["_class_name"]
+    cls = getattr(diffusers, name, None)
+    ok = bool(cls) and "image" in inspect.signature(cls.__call__).parameters
+    return common.json_response({"supports_image": ok, "pipeline": name})
+
+
+def park(_body: dict) -> common.Response:
+    """Free GPU memory for the chat model. Offloaded pipelines already give it back after each
+    run; only a fully-on-GPU pipeline needs moving to RAM (it moves back on next use)."""
+    global _parked
+    with _lock:
+        if _pipe is not None and _placement.startswith("gpu"):
+            import torch
+
+            _pipe.to("cpu")
+            torch.cuda.empty_cache()
+            _parked = True
+    return common.json_response({"parked": _parked})
+
+
 if __name__ == "__main__":
     common.main(
-        {"/generate": generate, "/generate_video": generate_video, "GET /progress": progress},
+        {
+            "/generate": generate,
+            "/generate_video": generate_video,
+            "/supports_image": supports_image,
+            "/park": park,
+            "GET /progress": progress,
+        },
         after_download=lambda dest, cfg: ensure_converted(str(dest), cfg),
     )

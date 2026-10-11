@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -15,7 +16,8 @@ class Tool:
     name: str
     description: str
     parameters: dict
-    run: Callable[[dict], Awaitable[str]]
+    # Returns text for the model, or {"content": text, "attachments": [...]} for media.
+    run: Callable[[dict], Awaitable[Any]]
     # Changes state (files, commands): needs approval unless auto-approve is on.
     mutating: bool = False
     # For the UI: which argument best summarizes the call.

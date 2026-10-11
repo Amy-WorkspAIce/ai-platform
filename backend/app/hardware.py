@@ -40,9 +40,18 @@ class Hardware:
         return asdict(self) | {"vram_total_gb": round(self.vram_total_gb, 1)}
 
 
+_gpu_cache: tuple[float, list] = (0.0, [])
+GPU_CACHE_SECONDS = 15
+
+
 def detect(data_dir: Path, vram_override_gb: float | None = None) -> Hardware:
+    global _gpu_cache
+    import time
+
+    if time.time() - _gpu_cache[0] > GPU_CACHE_SECONDS:
+        _gpu_cache = (time.time(), nvidia_gpus())
     hw = Hardware(
-        gpus=nvidia_gpus(),
+        gpus=list(_gpu_cache[1]),
         cpu_count=os.cpu_count(),
         disk_free_gb=_disk_free(data_dir),
     )

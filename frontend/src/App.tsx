@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Api, AuthError, getApiKey, setApiKey, type Conversation, type ModelInfo } from "./api";
 import { loadModelTable } from "./modelTable";
-import { AudioView } from "./views/AudioView";
 import { ChatView } from "./views/ChatView";
-import { ImagesView } from "./views/ImagesView";
+import { LibraryView } from "./views/LibraryView";
 import { ModelsView } from "./views/ModelsView";
 import { SettingsView } from "./views/SettingsView";
-import { VideoView } from "./views/VideoView";
 
-export type View = "chat" | "images" | "video" | "audio" | "models" | "settings";
+export type View = "chat" | "library" | "models" | "settings";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
@@ -125,7 +123,7 @@ export function App() {
           + New chat
         </button>
         <nav>
-          {(["chat", "images", "video", "audio", "models", "settings"] as View[]).map((v) => (
+          {(["chat", "library", "models", "settings"] as View[]).map((v) => (
             <button key={v} className={view === v ? "active" : ""} onClick={() => go(v)}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
@@ -186,36 +184,13 @@ export function App() {
             onBrowseModels={() => go("models")}
           />
         )}
-        {view === "images" && (
-          <ImagesView api={api} models={byCapability("image")} onBrowseModels={() => go("models")} />
-        )}
-        {view === "video" && (
-          <VideoView api={api} models={byCapability("video")} onBrowseModels={() => go("models")} />
-        )}
+        {view === "library" && <LibraryView api={api} onNewChat={() => openChat(null)} />}
         {view === "settings" && <SettingsView api={api} />}
-        {view === "audio" && (
-          <AudioView
-            api={api}
-            sttModels={byCapability("transcription")}
-            ttsModels={byCapability("speech")}
-            onBrowseModels={() => go("models")}
-          />
-        )}
         {view === "models" && (
           <ModelsView
             api={api}
             onModelsChanged={refreshModels}
-            onUseModel={(capability) =>
-              go(
-                capability === "image"
-                  ? "images"
-                  : capability === "video"
-                    ? "video"
-                    : capability === "chat"
-                      ? "chat"
-                      : "audio",
-              )
-            }
+            onUseModel={() => openChat(null)}
             onOpenSettings={() => go("settings")}
           />
         )}

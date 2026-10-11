@@ -29,6 +29,13 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages(conversation_id, created_at);
+CREATE TABLE IF NOT EXISTS audio (
+    id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    text TEXT NOT NULL,
+    params TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS videos (
     id TEXT PRIMARY KEY,
     model TEXT NOT NULL,
@@ -224,6 +231,31 @@ class Database:
     def delete_video(self, video_id: str) -> bool:
         with self.connect() as db:
             return db.execute("DELETE FROM videos WHERE id = ?", (video_id,)).rowcount > 0
+
+    # ---- audio ----
+
+    def add_audio(self, audio_id: str, model: str, text: str, params: dict) -> dict:
+        row = {
+            "id": audio_id,
+            "model": model,
+            "text": text,
+            "params": json.dumps(params),
+            "created_at": time.time(),
+        }
+        with self.connect() as db:
+            db.execute("INSERT INTO audio VALUES (:id, :model, :text, :params, :created_at)", row)
+        return row | {"params": params}
+
+    def list_audio(self, limit: int = 200) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM audio ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) | {"params": json.loads(r["params"])} for r in rows]
+
+    def delete_audio(self, audio_id: str) -> bool:
+        with self.connect() as db:
+            return db.execute("DELETE FROM audio WHERE id = ?", (audio_id,)).rowcount > 0
 
 
 def _conv(row: sqlite3.Row) -> dict:

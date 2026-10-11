@@ -31,13 +31,35 @@ export function SettingsView({ api, onChanged }: Props) {
         }}
       />
 
+      <DefaultModels
+        api={api}
+        models={settings.models}
+        onChange={(models) => setSettings({ ...settings, models })}
+      />
+
       <section className="card setting">
         <div className="setting-head">
-          <h2>Web search</h2>
-          <span className="tag tools">On</span>
+          <h2>Web access</h2>
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={settings.web_access}
+              onChange={async (e) => {
+                const enabled = e.target.checked;
+                try {
+                  await api.saveWebAccess(enabled);
+                  setSettings({ ...settings, web_access: enabled });
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              }}
+            />
+            {settings.web_access ? "On" : "Off"}
+          </label>
         </div>
         <p className="muted small">
-          Used when <strong>🌐 Web</strong> is on in a chat. Providers are tried in this order:
+          When on, chat models can search the web and read pages whenever a question needs current information.
+          Searches are tried with these providers, in order:
         </p>
         <ol className="providers">
           {settings.search.providers.map((p) => (
@@ -169,6 +191,72 @@ function HuggingFace({
         </a>
         . It's stored on your server only (in <code>/data/secrets</code>) and used just for downloading models.
       </p>
+    </section>
+  );
+}
+
+
+const CAPABILITY_LABEL: Record<string, { title: string; hint: string }> = {
+  image: { title: "Images", hint: "Used when you ask chat to create or edit an image." },
+  video: { title: "Video", hint: "Used when you ask chat for a video clip." },
+  speech: { title: "Voice (text to speech)", hint: "Used for read-aloud and when chat speaks." },
+  transcription: { title: "Transcription (speech to text)", hint: "Used for dictation and attached audio." },
+};
+
+function DefaultModels({
+  api,
+  models,
+  onChange,
+}: {
+  api: Api;
+  models: AppSettings["models"];
+  onChange: (m: AppSettings["models"]) => void;
+}) {
+  const [error, setError] = useState("");
+
+  async function choose(capability: string, value: string) {
+    setError("");
+    try {
+      onChange(await api.saveModelDefault(capability, value || null));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <section className="card setting">
+      <h2>Models</h2>
+      <p className="muted small">
+        Chat hands work off to these models. <strong>Best installed</strong> picks the most capable installed model that
+        runs well on your hardware, so you don't need to change anything here unless you want a specific one.
+      </p>
+      <div className="model-defaults">
+        {(Object.keys(CAPABILITY_LABEL) as (keyof AppSettings["models"])[]).map((cap) => {
+          const choice = models[cap];
+          const best = choice.installed.find((m) => m.id === choice.best);
+          return (
+            <label key={cap} className="model-default">
+              <span>
+                <strong>{CAPABILITY_LABEL[cap].title}</strong>
+                <span className="muted small"> · {CAPABILITY_LABEL[cap].hint}</span>
+              </span>
+              {choice.installed.length === 0 ? (
+                <span className="muted small">None installed (install one from Models)</span>
+              ) : (
+                <select value={choice.pinned ?? ""} onChange={(e) => void choose(cap, e.target.value)}>
+                  <option value="">Best installed{best ? ` (${best.name})` : ""}</option>
+                  {choice.installed.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+          );
+        })}
+      </div>
+      {error && <p className="error small">{error}</p>}
     </section>
   );
 }

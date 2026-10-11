@@ -6,10 +6,12 @@ import {
   getPref,
   setPref,
   type AgentEvent,
+  type Attachment,
   type ModelInfo,
   type StoredMessage,
   type WorkspaceInfo,
 } from "../api";
+import { AttachmentView, ImageView } from "../media";
 import { canRecord, extensionFor, useRecorder } from "../recorder";
 
 type Props = {
@@ -27,6 +29,7 @@ type ToolStatus = "awaiting" | "running" | "ok" | "error";
 type Item =
   | { kind: "user"; content: string }
   | { kind: "assistant"; content: string; reasoning: string }
+  | { kind: "notice"; text: string }
   | {
       kind: "tool";
       id: string;
@@ -35,6 +38,7 @@ type Item =
       args: Record<string, unknown> | string;
       status: ToolStatus;
       output?: string;
+      attachments?: Attachment[];
     };
 
 type Mode = "chat" | "agent";
@@ -48,7 +52,14 @@ const SUMMARY_ARG: Record<string, string> = {
   write_file: "path",
   edit_file: "path",
   run_command: "command",
+  generate_image: "prompt",
+  edit_image: "instruction",
+  generate_video: "prompt",
+  speak: "text",
 };
+
+/** Tools whose result is media shown in the chat. */
+const MEDIA_TOOLS = new Set(["generate_image", "edit_image", "generate_video", "speak"]);
 
 const TOOL_LABEL: Record<string, string> = {
   web_search: "Searched the web",
@@ -59,7 +70,18 @@ const TOOL_LABEL: Record<string, string> = {
   write_file: "Write file",
   edit_file: "Edit file",
   run_command: "Run command",
+  generate_image: "Image",
+  edit_image: "Edit",
+  generate_video: "Video",
+  speak: "Voice",
 };
+
+// Images the user attached are referenced in their message so the model can edit them.
+const ATTACHED = /\[Attached image: image_id=([a-f0-9]+)(?: \(([^)]*)\))?\]/g;
+
+function attachedIds(text: string): string[] {
+  return [...text.matchAll(ATTACHED)].map((m) => m[1]);
+}
 
 function parseArgs(raw: string): Record<string, unknown> | string {
   try {
@@ -101,6 +123,7 @@ function itemsFrom(messages: StoredMessage[]): Item[] {
       if (tool && tool.kind === "tool") {
         tool.status = m.meta?.ok ? "ok" : "error";
         tool.output = m.content;
+        tool.attachments = m.meta?.attachments;
       }
     }
   }
@@ -115,7 +138,9 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
   const [loading, setLoading] = useState(!!conversationId);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>((getPref("mode") as Mode) || "chat");
-  const [web, setWeb] = useState(getPref("web") === "1");
+  const [pendingImages, setPendingImages] = useState<{ id: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [workspace, setWorkspace] = useState(getPref("workspace"));
   const [autoApprove, setAutoApprove] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[] | null>(null);
@@ -137,7 +162,6 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
         setItems(itemsFrom(c.messages));
         if (c.model) setModel(c.model);
         if (c.settings?.mode) setMode(c.settings.mode);
-        if (c.settings?.web != null) setWeb(c.settings.web);
         if (c.settings?.workspace) setWorkspace(c.settings.workspace);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
@@ -171,7 +195,6 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
   useEffect(() => () => abort.current?.abort(), []);
 
   const noModels = models !== null && models.length === 0;
-  const usesTools = mode === "agent" || web;
   const needsWorkspace = mode === "agent" && !workspace;
 
   function appendText(field: "content" | "reasoning", delta: string) {
@@ -217,7 +240,10 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
         ]);
         break;
       case "tool_result":
-        updateTool(e.id, { status: e.ok ? "ok" : "error", output: e.output });
+        updateTool(e.id, { status: e.ok ? "ok" : "error", output: e.output, attachments: e.attachments });
+        break;
+      case "notice":
+        setItems((prev) => [...prev, { kind: "notice", text: e.message }]);
         break;
       case "error":
         setError(e.message);
@@ -243,7 +269,6 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
         message: text,
         conversation_id: convId.current,
         mode,
-        web,
         workspace: mode === "agent" ? workspace : null,
         auto_approve: autoApprove,
       },
@@ -253,17 +278,45 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
     if (convId.current) onSaved(convId.current);
   }
 
+  async function attachFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setError("");
+    try {
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith("image/")) {
+          const id = await api.uploadImage(file);
+          setPendingImages((p) => [...p, { id, name: file.name }]);
+        } else if (file.type.startsWith("audio/") || file.type.startsWith("video/")) {
+          if (!sttModel) throw new Error("Install a speech-to-text model (e.g. Whisper) to attach audio.");
+          const text = await api.transcribe(sttModel, file, file.name);
+          setInput((v) => `${v ? `${v}\n\n` : ""}Transcript of ${file.name}:\n${text}`);
+        } else {
+          throw new Error(`${file.name}: only images and audio can be attached.`);
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
   async function send() {
-    const text = input.trim();
-    if (!text || !model || busy || needsWorkspace) return;
+    const typed = input.trim();
+    if ((!typed && !pendingImages.length) || !model || busy || needsWorkspace) return;
+    const notes = pendingImages.map((p) => `[Attached image: image_id=${p.id} (${p.name.replace(/[()\]]/g, "")})]`);
+    const text = [typed || "Here's an image.", ...notes].join("\n\n");
+    setPendingImages([]);
     setItems((prev) => [...prev, { kind: "user", content: text }]);
     setInput("");
     setBusy(true);
     setError("");
     abort.current = new AbortController();
     try {
-      // All chats go through the server so they get the system prompt and are saved there;
-      // tools are only offered when Web or Agent mode is on.
+      // All chats go through the server: it adds the system prompt, saves the chat, and offers
+      // the tools (web, image/video/voice delegation, and workspace tools in agent mode).
       await sendWithTools(text);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
@@ -296,18 +349,6 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        className={`chip ${web ? "active" : ""}`}
-        disabled={busy}
-        title="Let the model search the web and read pages"
-        onClick={() => {
-          setWeb(!web);
-          setPref("web", web ? "0" : "1");
-        }}
-      >
-        🌐 Web
-      </button>
       {mode === "agent" && (
         <>
           <WorkspacePicker
@@ -331,8 +372,10 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
           </label>
         </>
       )}
-      {usesTools && modelInfo?.tools === false && (
-        <span className="warn small">This model can't use tools. Pick one tagged "Tools".</span>
+      {modelInfo?.tools === false && (
+        <span className="warn small">
+          This model can't use tools (web search, images, video). Pick one tagged "Tools" for those.
+        </span>
       )}
     </div>
   );
@@ -340,6 +383,18 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
   const composer = (
     <div className="composer-wrap">
       {toolbar}
+      {pendingImages.length > 0 && (
+        <div className="pending-attachments">
+          {pendingImages.map((p) => (
+            <span key={p.id} className="pending-chip">
+              🖼 {p.name}
+              <button type="button" aria-label="Remove" onClick={() => setPendingImages((x) => x.filter((y) => y.id !== p.id))}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <form
         className="composer"
         onSubmit={(e) => {
@@ -368,6 +423,23 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
             }
           }}
         />
+        <input
+          ref={fileInput}
+          type="file"
+          hidden
+          multiple
+          accept="image/*,audio/*"
+          onChange={(e) => void attachFiles(e.target.files)}
+        />
+        <button
+          type="button"
+          className="icon-button"
+          title="Attach an image (to edit or discuss) or an audio file (to transcribe)"
+          disabled={uploading || noModels}
+          onClick={() => fileInput.current?.click()}
+        >
+          {uploading ? "…" : "📎"}
+        </button>
         {sttModel && (
           <MicButton api={api} model={sttModel} onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} onError={setError} />
         )}
@@ -376,7 +448,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
             Stop
           </button>
         ) : (
-          <button type="submit" className="primary" disabled={!input.trim() || !model || needsWorkspace}>
+          <button type="submit" className="primary" disabled={(!input.trim() && !pendingImages.length) || !model || needsWorkspace}>
             Send
           </button>
         )}
@@ -433,9 +505,11 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
           <div className="messages">
             {items.map((item, i) =>
               item.kind === "user" ? (
-                <div key={i} className="msg user">
-                  {item.content}
-                </div>
+                <UserMessage key={i} api={api} content={item.content} />
+              ) : item.kind === "notice" ? (
+                <p key={i} className="notice muted small">
+                  {item.text}
+                </p>
               ) : item.kind === "assistant" ? (
                 <AssistantMessage
                   key={i}
@@ -446,7 +520,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
                   streaming={busy && i === lastIndex}
                 />
               ) : (
-                <ToolCard key={item.id} item={item} onDecide={decide} />
+                <ToolCard key={item.id} api={api} item={item} onDecide={decide} />
               ),
             )}
             {busy && items[lastIndex]?.kind === "user" && <span className="typing">●●●</span>}
@@ -521,13 +595,33 @@ function AssistantMessage({
   );
 }
 
+function UserMessage({ api, content }: { api: Api; content: string }) {
+  const ids = attachedIds(content);
+  const text = content.replace(ATTACHED, "").trim();
+  return (
+    <div className="msg user">
+      {ids.length > 0 && (
+        <div className="user-attachments">
+          {ids.map((id) => (
+            <ImageView key={id} api={api} id={id} alt="Attached image" />
+          ))}
+        </div>
+      )}
+      {text}
+    </div>
+  );
+}
+
 function ToolCard({
+  api,
   item,
   onDecide,
 }: {
+  api: Api;
   item: Extract<Item, { kind: "tool" }>;
   onDecide: (id: string, approve: boolean, always?: boolean) => void;
 }) {
+  const media = MEDIA_TOOLS.has(item.name);
   const args = typeof item.args === "object" ? item.args : {};
   const preview =
     item.name === "write_file"
@@ -538,18 +632,24 @@ function ToolCard({
   const awaiting = item.status === "awaiting";
 
   return (
-    <div className={`tool-card ${item.status}`}>
+    <div className={`tool-card ${item.status} ${media ? "media-tool" : ""}`}>
       <details open={awaiting}>
         <summary>
           <span className={`tool-status ${item.status}`} aria-label={item.status} />
           <span className="tool-label">{TOOL_LABEL[item.name] ?? item.name}</span>
           {item.summary && <code className="tool-summary">{item.summary}</code>}
           {awaiting && <span className="tool-waiting">needs approval</span>}
+          {media && item.status === "running" && <span className="tool-waiting muted">working…</span>}
         </summary>
         {preview && <pre className="tool-preview">{preview.length > 4000 ? `${preview.slice(0, 4000)}\n…` : preview}</pre>}
         {item.output != null && <pre className="tool-output">{item.output}</pre>}
         {typeof item.args === "string" && <pre className="tool-output">{item.args}</pre>}
       </details>
+      {item.attachments?.map((a, i) => (
+        <div key={i} className="tool-media">
+          <AttachmentView api={api} attachment={a} />
+        </div>
+      ))}
       {awaiting && (
         <div className="tool-actions">
           <button className="primary" onClick={() => onDecide(item.id, true)}>

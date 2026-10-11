@@ -42,13 +42,14 @@
 **Images and audio:** install an image model (e.g. FLUX.2 [klein]) or an audio model
 (Whisper, Kokoro) from **Models**. The first one of each kind also installs its engine
 into appdata: about 7 GB for images (PyTorch) and about 2 GB for audio. This happens once.
-Use the **Images** and **Audio** pages, or the mic and speaker buttons in chat.
+Then just ask in chat ("generate an image of…", "make it nighttime", "read this aloud").
+Results are in the **Library**.
 
 **More models:** **Models → Browse all models** lists the whole Ollama library and
 Hugging Face image/video/speech models, sorted by *Perfect match* for your GPU. Gated
 models (e.g. FLUX.1 [dev]) need a Hugging Face token: add it on the **Settings** page.
 
-**Video:** install Wan 2.1 (1.3B) from Models, then use the **Video** page. The first video
+**Video:** install Wan 2.1 (1.3B) from Models, then ask for a clip in chat. The first video
 model downloads ~29 GB (mostly its text encoder), and clips take minutes to render.
 
 **Web search:** turn on **🌐 Web** in the chat toolbar. Search runs through a SearXNG

@@ -21,4 +21,7 @@ plus web UI) packaged as a single container, Unraid-first but portable.
 - Agent/web tools: `backend/app/tools/`, loop in `backend/app/agent.py`. Any new mutating tool
   must set `mutating=True` (requires approval). Keep workspace path confinement and the secret
   scrubbing in `Workspace.env()` intact.
+- Chat is the only creation UI: new media capabilities are tools in `app/tools/creative.py`
+  (operations in `app/studio.py`, model choice in `app/delegation.py`), results returned as
+  `attachments` and shown via `frontend/src/media.tsx`.
 - License is AGPL-3.0; only add dependencies with compatible licenses.

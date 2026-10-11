@@ -16,6 +16,12 @@ call, and it can act on those apps through their APIs.
 
 ## Features
 
+- **One conversation does everything.** Ask in chat and Amy delegates: "generate a photo of
+  a cabin in the snow" → an image appears; "make it nighttime" → it edits that image;
+  "turn it into a short video" → a clip renders in the background; "read that aloud" → audio.
+  Attach your own images to edit, or audio files to transcribe. It searches the web when a
+  question needs current information. Everything created lands in your **Library**.
+
 - **One container, zero config.** Bundled [Ollama](https://ollama.com) with CUDA.
 - **Every model, rated for your hardware.** Browse the whole Ollama library plus image,
   video and speech models from Hugging Face (hundreds of families), organized by purpose,
@@ -106,6 +112,7 @@ print(reply.choices[0].message.content)
 - [x] Web access (search + page reading) and agent mode with approvals
 - [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)
+- [x] Chat as the single interface: delegates images, edits, video and speech to specialist models; Library for results
 - [ ] Image-to-video
 - [ ] Sandbox container for agent commands
 - [ ] Provider management in the UI

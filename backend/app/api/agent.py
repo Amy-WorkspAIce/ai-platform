@@ -21,6 +21,7 @@ from app.agent import ModelError, history_to_messages, run_agent
 from app.db import Database
 from app.security import require_api_key
 from app.tools import Toolset, Workspace, web_tools, workspace_tools
+from app.tools.creative import creative_prompt, creative_tools
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
 
@@ -44,9 +45,8 @@ and cite the pages as markdown links. Prefer official sources; if sources disagr
 If a tool fails, don't keep retrying it. Try one other approach (e.g. fetch_url on a site you \
 know) or tell the user what didn't work."""
 
-NO_WEB_PROMPT = """You do NOT have web access in this chat. If the user needs live or recent \
-information, say so briefly and mention they can turn on "Web" in the toolbar above the \
-message box, then help with what you do know."""
+NO_WEB_PROMPT = """You do NOT have web access (it's turned off in Settings). If the user needs \
+live or recent information, say so briefly and help with what you do know."""
 
 AGENT_PROMPT = """You are working as an autonomous coding agent in the workspace "{name}" \
 on the user's server.
@@ -78,7 +78,8 @@ class AgentChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=100_000)
     conversation_id: str | None = None
     mode: Literal["chat", "agent"] = "chat"
-    web: bool = False
+    # None = follow the "web access" setting (on by default); False turns it off for this chat.
+    web: bool | None = None
     workspace: str | None = None
     auto_approve: bool = False
 
@@ -112,14 +113,22 @@ def get_workspace(request: Request, name: str) -> Workspace:
     return Workspace(path, github_token=settings.github_token, home=home)
 
 
-def system_prompt(req: AgentChatRequest, ws: Workspace | None = None) -> str:
+def system_prompt(
+    req: AgentChatRequest,
+    ws: Workspace | None = None,
+    web: bool | None = None,
+    creative: str | None = None,
+) -> str:
     parts = [BASE_PROMPT.format(today=f"{date.today():%A, %B %d, %Y}")]
     if req.mode == "agent" and ws is not None:
         listing = ws.list_files(".", depth=1)
         if len(listing) > 2000:
             listing = listing[:2000] + "\n..."
         parts.append(AGENT_PROMPT.format(name=req.workspace, listing=listing))
-    parts.append(WEB_PROMPT if req.web else NO_WEB_PROMPT)
+    web = req.web if web is None else web
+    parts.append(WEB_PROMPT if web else NO_WEB_PROMPT)
+    if creative:
+        parts.append(creative)
     return "\n\n".join(parts)
 
 
@@ -139,12 +148,17 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         ws = get_workspace(request, req.workspace)
         for tool in workspace_tools(ws, state.settings.agent_command_timeout):
             toolset.add(tool)
-    if req.web:
+    web = state.user_settings.web_access and req.web is not False
+    if web:
         for tool in web_tools(state.settings, state.http):
             toolset.add(tool)
+    # Delegation: image/video/speech tools for whatever media models are installed.
+    media_tools = creative_tools(request.app)
+    for tool in media_tools:
+        toolset.add(tool)
 
     db: Database = state.db
-    settings = {"mode": req.mode, "web": req.web, "workspace": req.workspace}
+    settings = {"mode": req.mode, "web": web, "workspace": req.workspace}
     if req.conversation_id:
         conv = db.get_conversation(req.conversation_id)
         if conv is None:
@@ -157,7 +171,10 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     conv_id = conv["id"]
     db.add_message(conv_id, "user", req.message)
 
-    messages = [{"role": "system", "content": system_prompt(req, ws)}, *history]
+    messages = [
+        {"role": "system", "content": system_prompt(req, ws, web, creative_prompt(media_tools))},
+        *history,
+    ]
     messages.append({"role": "user", "content": req.message})
 
     run = state.agent_runs.create(auto_approve=req.auto_approve)

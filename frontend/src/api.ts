@@ -176,6 +176,29 @@ export class Api {
     });
   clearHfToken = () => this.request<HfStatus>("/api/settings/huggingface", { method: "DELETE" });
 
+  async uploadImage(file: File): Promise<string> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return (await this.request<{ id: string }>("/api/images/upload", { method: "POST", body: form })).id;
+  }
+  saveModelDefault = (capability: string, model: string | null) =>
+    this.request<AppSettings["models"]>("/api/settings/models", {
+      method: "PUT",
+      body: JSON.stringify({ capability, model }),
+    });
+  saveWebAccess = (enabled: boolean) =>
+    this.request<{ web_access: boolean }>("/api/settings/web", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+
+  // ---- audio library ----
+  audioList = () => this.request<GalleryAudio[]>("/api/audio");
+  deleteAudio = (id: string) => this.request<void>(`/api/audio/${id}`, { method: "DELETE" });
+  async audioUrl(id: string): Promise<string> {
+    return URL.createObjectURL(await (await this.raw(`/api/audio/${id}`)).blob());
+  }
+
   // ---- video ----
   generateVideo = (req: VideoRequest) =>
     this.request<{ id: string }>("/v1/videos/generations", { method: "POST", body: JSON.stringify(req) });
@@ -265,11 +288,32 @@ export type ModelTable = { models: ModelRow[]; hardware: Hardware; hf_token_set:
 
 export type HfStatus = { token_set: boolean; username: string | null; source: "env" | "ui" | null };
 
+export type ModelChoice = {
+  pinned: string | null;
+  best: string | null;
+  installed: { id: string; name: string; fit: Fit }[];
+};
+
 export type AppSettings = {
   version: string;
   huggingface: HfStatus;
   search: { providers: string[]; bundled_searxng: boolean };
+  web_access: boolean;
+  models: Record<"image" | "video" | "speech" | "transcription", ModelChoice>;
 };
+
+export type GalleryAudio = {
+  id: string;
+  model: string;
+  text: string;
+  created_at: number;
+  params: { voice: string; speed: number };
+};
+
+export type Attachment =
+  | { type: "image"; id: string }
+  | { type: "video"; job_id: string }
+  | { type: "audio"; id: string };
 
 export type VideoRequest = {
   model: string;
@@ -350,6 +394,7 @@ export type StoredMessage = {
     tool_call_id?: string;
     name?: string;
     ok?: boolean;
+    attachments?: Attachment[];
   } | null;
 };
 
@@ -360,7 +405,6 @@ export type AgentRequest = {
   message: string;
   conversation_id?: string | null;
   mode: "chat" | "agent";
-  web: boolean;
   workspace?: string | null;
   auto_approve: boolean;
 };
@@ -376,7 +420,8 @@ export type AgentEvent =
       summary: string;
       needs_approval: boolean;
     }
-  | { type: "tool_result"; id: string; ok: boolean; output: string }
+  | { type: "tool_result"; id: string; ok: boolean; output: string; attachments?: Attachment[] }
+  | { type: "notice"; message: string }
   | { type: "error"; message: string }
   | { type: "done" };
 

@@ -9,7 +9,7 @@ Events are pushed to an asyncio queue and streamed to the browser as server-sent
     {"type": "start", "run_id", "conversation_id"}
     {"type": "text" | "reasoning", "delta"}
     {"type": "tool_call", "id", "name", "arguments", "summary", "needs_approval"}
-    {"type": "tool_result", "id", "ok", "output"}
+    {"type": "tool_result", "id", "ok", "output", "attachments"?}
     {"type": "error", "message"}
     {"type": "done"}
 """
@@ -92,6 +92,10 @@ class ModelError(Exception):
     pass
 
 
+class ToolsUnsupported(ModelError):
+    """The model rejected a request because it can't call tools."""
+
+
 async def run_agent(
     run: AgentRun,
     *,
@@ -106,9 +110,23 @@ async def run_agent(
     """Run until the model answers without calling tools (or max_steps is reached)."""
     failures: dict[tuple[str, str], int] = {}  # identical failing calls, to break loops
     for _step in range(max_steps):
-        content, reasoning, calls = await _stream_turn(
-            run, provider, model, client, messages, toolset
-        )
+        try:
+            content, reasoning, calls = await _stream_turn(
+                run, provider, model, client, messages, toolset
+            )
+        except ToolsUnsupported:
+            if not toolset:
+                raise
+            # Plain chat still works; just without web search or media creation.
+            toolset = Toolset()
+            await run.emit(
+                {
+                    "type": "notice",
+                    "message": "This model can't use tools, so web search and image/video "
+                    "creation are off. Pick a model tagged 'Tools' for those.",
+                }
+            )
+            continue
         assistant: dict = {"role": "assistant", "content": content}
         if calls:
             assistant["tool_calls"] = [
@@ -152,13 +170,10 @@ async def run_agent(
             messages.append(
                 {"role": "tool", "tool_call_id": call["id"], "content": result["content"]}
             )
-            persist(
-                {
-                    "role": "tool",
-                    "content": result["content"],
-                    "meta": {"tool_call_id": call["id"], "name": call["name"], "ok": result["ok"]},
-                }
-            )
+            meta = {"tool_call_id": call["id"], "name": call["name"], "ok": result["ok"]}
+            if result.get("attachments"):
+                meta["attachments"] = result["attachments"]
+            persist({"role": "tool", "content": result["content"], "meta": meta})
     await run.emit(
         {
             "type": "error",
@@ -190,7 +205,10 @@ async def _stream_turn(
     try:
         if resp.status_code >= 400:
             await resp.aread()
-            raise ModelError(_error_message(resp))
+            message = _error_message(resp)
+            if "can't use tools" in message:
+                raise ToolsUnsupported(message)
+            raise ModelError(message)
         async for line in resp.aiter_lines():
             if not line.startswith("data:"):
                 continue
@@ -273,27 +291,34 @@ async def _run_tool(run: AgentRun, toolset: Toolset, call: dict) -> dict:
             run, call, False, "The user denied this action. Ask how they'd like to proceed."
         )
     started = time.time()
+    attachments: list[dict] = []
     try:
         output = await tool.run(args)
+        if isinstance(output, dict):  # text for the model + media for the user
+            attachments = output.get("attachments") or []
+            output = output["content"]
         ok = True
     except KeyError as exc:
         output, ok = f"Error: missing required argument {exc}. Call the tool again with it.", False
     except (ToolError, WebError, TypeError, ValueError, OSError) as exc:
         output, ok = f"Error: {exc}", False
     log.info("tool %s ok=%s %.1fs", call["name"], ok, time.time() - started)
-    return await _result(run, call, ok, output)
+    return await _result(run, call, ok, output, attachments)
 
 
-async def _result(run: AgentRun, call: dict, ok: bool, content: str) -> dict:
-    await run.emit(
-        {
-            "type": "tool_result",
-            "id": call["id"],
-            "ok": ok,
-            "output": clip(content, UI_OUTPUT_CHARS),
-        }
-    )
-    return {"ok": ok, "content": content}
+async def _result(
+    run: AgentRun, call: dict, ok: bool, content: str, attachments: list[dict] | None = None
+) -> dict:
+    event = {
+        "type": "tool_result",
+        "id": call["id"],
+        "ok": ok,
+        "output": clip(content, UI_OUTPUT_CHARS),
+    }
+    if attachments:
+        event["attachments"] = attachments
+    await run.emit(event)
+    return {"ok": ok, "content": content, "attachments": attachments or []}
 
 
 def history_to_messages(stored: list[dict]) -> list[dict]:

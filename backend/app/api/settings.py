@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app import __version__
+from app.delegation import CAPABILITIES, installed_for
 from app.security import require_api_key
 from app.tools.web import provider_chain
 from app.user_settings import UserSettings, verify_hf_token
@@ -13,6 +14,15 @@ router = APIRouter(prefix="/api/settings", dependencies=[Depends(require_api_key
 
 class TokenBody(BaseModel):
     token: str = Field(min_length=8, max_length=500)
+
+
+class ModelDefaultBody(BaseModel):
+    capability: str
+    model: str | None = None  # None = best installed
+
+
+class WebBody(BaseModel):
+    enabled: bool
 
 
 def store(request: Request) -> UserSettings:
@@ -31,7 +41,40 @@ async def get_settings(request: Request) -> dict:
         "version": __version__,
         "huggingface": huggingface_status(store(request)),
         "search": {"providers": provider_chain(s), "bundled_searxng": s.bundled_searxng},
+        "web_access": store(request).web_access,
+        "models": model_choices(request),
     }
+
+
+def model_choices(request: Request) -> dict:
+    defaults = store(request).model_defaults()
+    out = {}
+    for cap in CAPABILITIES:
+        installed = installed_for(request.app, cap)
+        out[cap] = {
+            "pinned": defaults.get(cap),
+            "best": installed[0]["id"] if installed else None,
+            "installed": [{"id": m["id"], "name": m["name"], "fit": m["fit"]} for m in installed],
+        }
+    return out
+
+
+@router.put("/models")
+async def set_model_default(request: Request, body: ModelDefaultBody) -> dict:
+    if body.capability not in CAPABILITIES:
+        raise HTTPException(400, f"Unknown capability '{body.capability}'")
+    if body.model and body.model not in {
+        m["id"] for m in installed_for(request.app, body.capability)
+    }:
+        raise HTTPException(400, f"'{body.model}' isn't an installed {body.capability} model")
+    store(request).set_model_default(body.capability, body.model)
+    return model_choices(request)
+
+
+@router.put("/web")
+async def set_web_access(request: Request, body: WebBody) -> dict:
+    store(request).set_web_access(body.enabled)
+    return {"web_access": body.enabled}
 
 
 @router.put("/huggingface")

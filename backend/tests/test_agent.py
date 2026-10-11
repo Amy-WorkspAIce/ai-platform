@@ -435,6 +435,6 @@ def test_system_prompt_explains_date_and_web_access():
     from app.api.agent import AgentChatRequest, system_prompt
 
     no_web = system_prompt(AgentChatRequest(model="m", message="x"))
-    assert "not a trick" in no_web and "do NOT have web access" in no_web and '"Web"' in no_web
+    assert "not a trick" in no_web and "do NOT have web access" in no_web
     with_web = system_prompt(AgentChatRequest(model="m", message="x", web=True))
     assert "You have web access" in with_web and "do NOT" not in with_web

@@ -421,9 +421,10 @@ function Action({ row: r, install, remove, use, pulls, onOpenSettings }: { row: 
   if (r.installed) {
     return (
       <span className="row-actions">
-        {!r.use_cases.includes("embedding") && (
+        {/* Media models are used automatically when you ask in chat (Settings can pin one). */}
+        {r.engine === "ollama" && !r.use_cases.includes("embedding") && (
           <button className="secondary" onClick={() => use(r)}>
-            Use
+            Chat
           </button>
         )}
         <button className="link danger" onClick={() => remove(r.tag)}>
