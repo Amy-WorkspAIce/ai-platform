@@ -58,6 +58,34 @@ def params_from_label(label: str) -> float | None:
     return a if m.group(3) == "b" else a / 1000
 
 
+AGE_UNITS = {"hour": 1 / 24, "day": 1, "week": 7, "month": 30.4, "year": 365.25}
+
+
+def age_days(text: str) -> float | None:
+    """'yesterday' -> 1, '3 months ago' -> 91.2, 'a year ago' -> 365.25."""
+    t = text.strip().lower()
+    if t in ("just now", "today") or "minute" in t or "second" in t:
+        return 0
+    if t == "yesterday":
+        return 1
+    m = re.fullmatch(r"(an?|\d+)\s+(hour|day|week|month|year)s?\s+ago", t)
+    if not m:
+        return None
+    n = 1 if m.group(1) in ("a", "an") else int(m.group(1))
+    return n * AGE_UNITS[m.group(2)]
+
+
+def iso_to_epoch(value: str | None) -> float | None:
+    if not value:
+        return None
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
 def estimate_ollama_gb(params_b: float | None) -> float | None:
     # Default Ollama tags are ~Q4_K_M: about 0.6 GB per billion parameters.
     return round(params_b * 0.6 + 0.2, 2) if params_b else None
@@ -153,12 +181,20 @@ def parse_ollama_library(html: str) -> list[dict]:
         re.S,
     )
     counts = {name: human_count(n) for name, n in pulls}
+    # "Updated <span>2 years ago</span>": when the model was last updated in the library.
+    updated = re.findall(
+        r'href="/library/([\w.\-]+)".*?Updated&nbsp;</span>\s*<span[^>]*>([^<]+)</span>', html, re.S
+    )
+    now = time.time()
+    ages = {name: age_days(text) for name, text in updated}
     seen, out = set(), []
     for m in parser.models:
         if m["name"] in seen:
             continue
         seen.add(m["name"])
         m["pulls"] = counts.get(m["name"], 0)
+        age = ages.get(m["name"])
+        m["updated"] = now - age * 86400 if age is not None else None
         out.append(m)
     return out
 
@@ -193,6 +229,7 @@ def ollama_family(m: dict, exact_sizes: dict[str, float]) -> dict:
                 # Ollama only publishes pulls per family (all sizes combined).
                 "downloads": m["pulls"],
                 "downloads_scope": "family",
+                "updated": m.get("updated"),
             }
         )
     cloud_only = "cloud" in caps and not local_sizes
@@ -273,6 +310,7 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "engine_task": task,
         "downloads": model.get("downloads", 0),
         "downloads_scope": "model",
+        "updated": iso_to_epoch(model.get("lastModified")),
     }
     if size:
         # Rough until installed: components load one at a time, and the largest is usually
@@ -470,6 +508,7 @@ class LiveCatalog:
                     ("expand[]", "downloads"),
                     ("expand[]", "gated"),
                     ("expand[]", "cardData"),
+                    ("expand[]", "lastModified"),
                 ],
                 headers=hf_headers(token),
                 timeout=30,
@@ -526,6 +565,7 @@ class LiveCatalog:
                         "size_estimated": False,
                         "downloads": m.get("downloads", 0),
                         "downloads_scope": "family",
+                        "updated": iso_to_epoch(m.get("lastModified")),
                     }
                     for q, gb in sorted(quants.items(), key=lambda kv: kv[1])
                 ],

@@ -9,6 +9,8 @@ their needs explicitly: ``vram_gb`` to run well on a GPU, ``ram_gb`` for CPU off
 """
 
 import json
+import math
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -188,8 +190,18 @@ def merge(curated: list[dict], live: list[dict]) -> list[dict]:
     """
     by_tag = {v["tag"]: v for f in live for v in f["variants"]}
     ollama_pulls = {f["name"]: f.get("popularity") for f in live if f.get("source") == "ollama"}
+    ollama_updated = {
+        f["name"]: f["variants"][0].get("updated")
+        for f in live
+        if f.get("source") == "ollama" and f["variants"]
+    }
     curated = [
-        {**f, "variants": [_with_downloads(v, by_tag, ollama_pulls) for v in f["variants"]]}
+        {
+            **f,
+            "variants": [
+                _with_downloads(v, by_tag, ollama_pulls, ollama_updated) for v in f["variants"]
+            ],
+        }
         for f in curated
     ]
     seen = {v["tag"] for f in curated for v in f["variants"]}
@@ -265,10 +277,9 @@ def _row_sort_key(sort: str):
     if sort == "fit":
         # Most headroom first: best tier, then the smallest model in it.
         return lambda r: (_tier(r), r.get("needed_gb") or float("inf"))
-    # "perfect": runs well first; within that, the model that uses the most of your
-    # hardware (memory needed while running, comparable across chat/image/video, unlike
-    # download size) - a 0.6B model fits, but an 8B that also fits is far more capable.
-    return lambda r: (_tier(r), -_capability(r), -_downloads(r))
+    # "perfect": runs well first; within that, the best overall model (see match_score).
+    now = time.time()
+    return lambda r: (_tier(r), -match_score(r, now), -_downloads(r))
 
 
 def _downloads(row: dict) -> int:
@@ -310,13 +321,54 @@ def browse(
     return {"total": len(rows), "models": rows[offset : offset + limit]}
 
 
-def _with_downloads(v: dict, by_tag: dict, ollama_pulls: dict) -> dict:
+def _with_downloads(v: dict, by_tag: dict, ollama_pulls: dict, ollama_updated: dict) -> dict:
+    """Curated models borrow download counts and dates from the live listings."""
     if "downloads" in v:
         return v
     match = by_tag.get(v["tag"])
     if match and match.get("downloads") is not None:
-        return {**v, "downloads": match["downloads"], "downloads_scope": match["downloads_scope"]}
+        return {
+            **v,
+            "downloads": match["downloads"],
+            "downloads_scope": match["downloads_scope"],
+            "updated": match.get("updated"),
+        }
     family = v["tag"].split(":", 1)[0]
     if ollama_pulls.get(family):
-        return {**v, "downloads": ollama_pulls[family], "downloads_scope": "family"}
+        return {
+            **v,
+            "downloads": ollama_pulls[family],
+            "downloads_scope": "family",
+            "updated": ollama_updated.get(family),
+        }
     return v
+
+
+# Perfect-match score weights. Keep in sync with frontend/src/modelTable.ts.
+POPULARITY_WEIGHT = 0.12  # per order of magnitude of downloads
+POPULARITY_CAP = 100_000_000  # beyond this, more downloads don't add anything
+CURATED_BONUS = 0.25
+AGE_GRACE_DAYS = 180  # no penalty for models updated in the last ~6 months
+AGE_MAX_PENALTY = 1.0  # reached at 2 years
+AGE_FULL_DAYS = 730
+
+
+def match_score(row: dict, now: float | None = None) -> float:
+    """How good a pick this is, among models that fit equally well.
+
+    Capability (memory used while running, log scale) dominates: doubling the size is worth
+    1 point, so a 12B beats a 4B. Popularity (log of downloads, 0.12 per 10x, capped at 100M,
+    so at most ~1 point) and recency
+    (up to -1 for models not updated in 2 years) separate models of similar size, e.g. a
+    current 12B over a two-year-old 14B.
+    """
+    now = now or time.time()
+    score = math.log2(1 + _capability(row))
+    score += POPULARITY_WEIGHT * math.log10(1 + min(_downloads(row), POPULARITY_CAP))
+    if row.get("source", "curated") == "curated":
+        score += CURATED_BONUS
+    updated = row.get("updated")
+    if updated:
+        age = max(0.0, (now - updated) / 86400 - AGE_GRACE_DAYS)
+        score -= AGE_MAX_PENALTY * min(1.0, age / (AGE_FULL_DAYS - AGE_GRACE_DAYS))
+    return score

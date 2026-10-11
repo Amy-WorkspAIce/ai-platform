@@ -11,7 +11,7 @@ import {
   type PullState,
   type SortKey,
 } from "../api";
-import { downloads, filterModels, loadModelTable } from "../modelTable";
+import { ago, downloads, filterModels, loadModelTable } from "../modelTable";
 
 type Props = {
   api: Api;
@@ -377,6 +377,7 @@ function Row({ row: r, useCases, ...actions }: { row: ModelRow; useCases: Catalo
           {r.use_cases.map((u) => names[u] ?? u).join(" · ")}
           {r.publisher ? ` · ${r.publisher}` : ""}
           {r.license ? ` · ${r.license}` : ""}
+          {r.updated ? ` · updated ${ago(r.updated)}` : ""}
           {r.description ? ` · ${r.description}` : ""}
         </div>
         {(r.unsupported || r.engine_note) && <div className="engine-note small">{r.unsupported || r.engine_note}</div>}

@@ -254,6 +254,8 @@ export type ModelRow = Variant & {
   popularity?: number;
   downloads?: number;
   downloads_scope?: "model" | "family";
+  /** When the model was last updated (epoch seconds), if the source says. */
+  updated?: number | null;
   unsupported?: string | null;
   engine_note: string | null;
   engine_installed: boolean;

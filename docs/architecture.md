@@ -101,8 +101,12 @@ filtered to formats Amy can run: diffusers pipelines, faster-whisper, GGUF). Fam
 categorized by purpose (General, Reasoning, Code, Agent & tools, Vision, Embeddings, Image,
 Video, Speech-to-text, Text-to-speech) and every model gets a fit rating. The Models page
 shows one flat table (one row per installable model, e.g. "qwen3 8B"). **Perfect match**
-sorting ranks the best fit tier first, then the model that uses the most of the hardware, so
-the top rows are what to install. The server warms the listings at startup and refreshes them
+sorting ranks the best fit tier first, then by a score: capability (memory used while running,
+log scale: doubling the size is worth 1 point) plus popularity (0.12 per 10x downloads, capped
+at 100M) plus a small bonus for curated picks, minus an age penalty (none for models updated in
+the last 6 months, up to 1 point at 2 years). Bigger models that fit win; popularity and recency
+decide between similar sizes. The same formula lives in `catalog/__init__.py` (API) and
+`frontend/src/modelTable.ts` (UI). The server warms the listings at startup and refreshes them
 every few hours (`AMY_CATALOG_WARMUP`); the browser fetches the table once (~40 KB gzipped)
 and filters, sorts and searches locally. Hugging Face searches beyond the standard listing
 are explicit ("Search Hugging Face for …").

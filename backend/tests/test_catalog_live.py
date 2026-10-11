@@ -52,9 +52,47 @@ def test_perfect_sort_is_one_flat_list_biggest_fitting_first():
         fam("huge", [40]),
     )
     order = tags(catalog.browse(models, sort="perfect"))
-    assert order[:4] == ["gemma3:8.1", "gemma3:3.3", "gemma3:0.8", "tiny:0.4"]
+    # Bigger models that fit come first, even against an absurdly popular tiny one...
+    assert order[:2] == ["gemma3:8.1", "gemma3:3.3"]
+    # ...but among tiny models (similar size), the far more popular one wins.
+    assert order.index("tiny:0.4") < order.index("gemma3:0.8")
     assert order.index("gemma3:17.4") > order.index("tiny:0.4")  # partial after GPU fits
     assert order[-1] == "huge:40"
+
+
+def test_perfect_match_weighs_popularity_and_age_between_similar_sizes():
+    import time
+
+    now = time.time()
+    year = 365 * 86400
+    old = fam("qwen", [9.0], source="ollama")
+    old["variants"][0].update(downloads=8_000_000, updated=now - 2 * year)
+    new = fam("gemma3", [8.2], source="ollama")
+    new["variants"][0].update(downloads=41_000_000, updated=now - 30 * 86400)
+    tiny = fam("tiny", [0.4], source="ollama")
+    tiny["variants"][0].update(downloads=500_000_000, updated=now)
+    hw = Hardware(gpus=[Gpu("big", 16, 15)], ram_total_gb=64, disk_free_gb=500)
+    rows = [catalog.annotate(f, hw, set(), set()) for f in (old, new, tiny)]
+    order = tags(catalog.browse(rows, sort="perfect"))
+    # The current, popular 12B-class model beats the slightly bigger two-year-old one...
+    assert order[0] == "gemma3:8.2"
+    # ...and even a hugely popular tiny model doesn't beat models that are much more capable.
+    assert order[-1] == "tiny:0.4"
+
+
+@pytest.mark.parametrize(
+    ("text", "days"),
+    [
+        ("yesterday", 1),
+        ("2 years ago", 730.5),
+        ("1 month ago", 30.4),
+        ("a year ago", 365.25),
+        ("6 days ago", 6),
+        ("bogus", None),
+    ],
+)
+def test_age_days(text, days):
+    assert live.age_days(text) == days
 
 
 def test_other_sorts():
