@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from app.context import fit
 from app.providers import Provider
 from app.tools import Toolset
 from app.tools.web import WebError
@@ -106,10 +107,14 @@ async def run_agent(
     toolset: Toolset,
     persist: Persist,
     max_steps: int = 40,
+    context_budget: int | None = None,
 ) -> None:
     """Run until the model answers without calling tools (or max_steps is reached)."""
     failures: dict[tuple[str, str], int] = {}  # identical failing calls, to break loops
     for _step in range(max_steps):
+        if context_budget:
+            # Tool results pile up between steps; trim old ones if we're near the limit.
+            fit(messages, context_budget)
         try:
             content, reasoning, calls = await _stream_turn(
                 run, provider, model, client, messages, toolset
@@ -319,6 +324,42 @@ async def _result(
         event["attachments"] = attachments
     await run.emit(event)
     return {"ok": ok, "content": content, "attachments": attachments or []}
+
+
+def history_with_ids(
+    stored: list[dict], after_id: str | None = None
+) -> tuple[list[dict], list[str]]:
+    """Like history_to_messages, starting after ``after_id`` (the summarized part), and also
+    returning the stored message id behind each rebuilt message."""
+    if after_id:
+        idx = next((i for i, m in enumerate(stored) if m["id"] == after_id), None)
+        if idx is not None:
+            stored = stored[idx + 1 :]
+    out: list[dict] = []
+    ids: list[str] = []
+    for m in stored:
+        meta = m.get("meta") or {}
+        if m["role"] == "tool":
+            if out and (out[-1].get("tool_calls") or out[-1].get("role") == "tool"):
+                out.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": meta.get("tool_call_id", ""),
+                        "content": m["content"],
+                    }
+                )
+                ids.append(m["id"])
+            continue
+        msg: dict = {"role": m["role"], "content": m["content"]}
+        if meta.get("tool_calls"):
+            msg["tool_calls"] = meta["tool_calls"]
+        out.append(msg)
+        ids.append(m["id"])
+    # A leading tool result without its call would be rejected by the model server.
+    while out and out[0]["role"] == "tool":
+        out.pop(0)
+        ids.pop(0)
+    return out, ids
 
 
 def history_to_messages(stored: list[dict]) -> list[dict]:

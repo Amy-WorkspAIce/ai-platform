@@ -29,8 +29,13 @@ call, and it can act on those apps through their APIs.
   **Perfect match**: the most capable models that still run well on your machine. Curated
   picks per use case sit on top; one click installs anything, including the engine it needs.
   Gated models work with your Hugging Face token (Settings).
-- **ChatGPT-style chat** with saved conversations, streaming, markdown, collapsible
-  "thinking" for reasoning models, dictation and read-aloud.
+- **ChatGPT-style chat** with saved conversations in collapsible folders (drag and drop),
+  streaming, markdown, collapsible "thinking" for reasoning models, dictation and read-aloud.
+- **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …") and
+  brings the relevant ones into new conversations. The Memory page lets you search, edit,
+  add and delete them, or switch memory off. Secrets are never stored.
+- **Long chats just work**: old tool output is trimmed and the oldest messages are summarized
+  automatically when a conversation outgrows the model's context window.
 - **Web access**: the model can search the web through a built-in, private SearXNG
   (no setup; Brave or your own SearXNG optional) and read pages, citing its sources.
 - **Agent mode**: describe a feature and Amy works on it in a workspace (an empty folder
@@ -113,6 +118,7 @@ print(reply.choices[0].message.content)
 - [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)
 - [x] Chat as the single interface: delegates images, edits, video and speech to specialist models; Library for results
+- [x] Chat folders, long-term memory (Memory page), automatic context management
 - [ ] Image-to-video
 - [ ] Sandbox container for agent commands
 - [ ] Provider management in the UI

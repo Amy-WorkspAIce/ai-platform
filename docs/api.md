@@ -43,8 +43,15 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`; for Hugging Face diffusers/whisper repos add `"engine": "image"` or `"audio"` (the download plan is worked out from the repo). |
 | GET | `/api/models/pulls` | Progress of active and recent downloads (`status`, `completed`, `total`, `done`, `error`). |
 | DELETE | `/api/models/{model}` | Deletes an installed model. |
-| GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model"}`) saved chats. |
-| GET/PATCH/DELETE | `/api/conversations/{id}` | Fetch with messages, rename (`{"title"}`), delete. |
+| GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model", "folder_id"?}`) saved chats. |
+| GET/PATCH/DELETE | `/api/conversations/{id}` | Fetch with messages; PATCH `{"title"?, "folder_id"?}` renames or moves (`"folder_id": ""` removes it from its folder); delete. |
+| GET/POST | `/api/folders` | List chat folders or create one (`{"name"}`). |
+| PATCH/DELETE | `/api/folders/{id}` | `{"name"?, "collapsed"?, "position"?}`; deleting a folder keeps its chats (they become unfiled). |
+| GET | `/api/memory?q=` | Remembered facts plus `enabled`, `auto`, `embedding_model`, `categories`. With `q`, ranked by relevance (by meaning when an embedding model is installed). |
+| POST | `/api/memory` | Add a fact: `{"text", "category"?}`. Text that looks like a secret is rejected. |
+| PATCH/DELETE | `/api/memory/{id}` | Edit (`{"text"?, "category"?}`) or forget one fact. |
+| DELETE | `/api/memory?confirm=true` | Forget everything. |
+| PUT | `/api/memory/settings` | `{"enabled"?, "auto"?}`: use memory in chats; learn new facts automatically. |
 | POST | `/api/conversations/{id}/messages` | Append `{"role", "content", "reasoning"?, "model"?}`. |
 | GET | `/api/images` | Library: images (generated or uploaded). |
 | POST | `/api/images/upload` | Add your own image (multipart `file`), e.g. for the chat to edit. |
@@ -57,7 +64,7 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/videos/jobs` | Video jobs with live progress (`phase`, `step`, `steps`, `status`, `error`). |
 | GET | `/api/videos` | Video gallery. |
 | GET/DELETE | `/api/videos/{id}` | Fetch the MP4, or delete it. |
-| POST | `/api/agent/chat` | The chat endpoint (tools included). Body: `model`, `message`, `conversation_id?`, `mode` (`chat` or `agent`), `web?` (omit to follow the setting; `false` disables), `workspace?`, `auto_approve`. Media tools are offered for installed models; `tool_result` events may carry `attachments` (`image` id, `video` job_id, `audio` id); `notice` events report fallbacks. Streams server-sent events: `start`, `text`, `reasoning`, `tool_call`, `tool_result`, `error`, `done`. Saves the conversation, including tool calls. |
+| POST | `/api/agent/chat` | The chat endpoint (tools included). Body: `model`, `message`, `conversation_id?`, `folder_id?` (for a new chat), `mode` (`chat` or `agent`), `web?` (omit to follow the setting; `false` disables), `workspace?`, `auto_approve`. Media tools are offered for installed models; `tool_result` events may carry `attachments` (`image` id, `video` job_id, `audio` id); `notice` events report fallbacks. Streams server-sent events: `start`, `text`, `reasoning`, `tool_call`, `tool_result`, `notice`, `answer_done` (reply complete), `memory` (`{"action": "remembered"|"updated"|"removed", "text"}`, after the answer), `error`, `done`. Saves the conversation, including tool calls. Long chats are condensed automatically (a `notice` says so). |
 | POST | `/api/agent/runs/{run_id}/approve` | `{"call_id", "approve", "always"}`: answer a pending approval. |
 | GET/POST | `/api/workspaces` | List workspaces (with git branch/changes) or create one: `{"name", "git_url"?}`. |
 | DELETE | `/api/workspaces/{name}` | Delete a workspace and its files. |
@@ -71,4 +78,4 @@ token. On some GPUs, the first run compiles CUDA kernels, which can take minutes
 it during install means users don't wait on their first message. The status shows
 "Optimizing for your GPU (first run only)" while this happens.
 
-Planned: provider CRUD, API key management, connectors, conversations.
+Planned: provider CRUD, API key management, connectors.

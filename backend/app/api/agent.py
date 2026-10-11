@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agent import ModelError, history_to_messages, run_agent
+from app import context, memory
+from app.agent import ModelError, history_with_ids, run_agent
 from app.db import Database
 from app.security import require_api_key
 from app.tools import Toolset, Workspace, web_tools, workspace_tools
@@ -82,6 +83,7 @@ class AgentChatRequest(BaseModel):
     web: bool | None = None
     workspace: str | None = None
     auto_approve: bool = False
+    folder_id: str | None = None  # for a new chat: create it inside this folder
 
 
 class ApprovalRequest(BaseModel):
@@ -118,6 +120,7 @@ def system_prompt(
     ws: Workspace | None = None,
     web: bool | None = None,
     creative: str | None = None,
+    memories: str | None = None,
 ) -> str:
     parts = [BASE_PROMPT.format(today=f"{date.today():%A, %B %d, %Y}")]
     if req.mode == "agent" and ws is not None:
@@ -129,6 +132,8 @@ def system_prompt(
     parts.append(WEB_PROMPT if web else NO_WEB_PROMPT)
     if creative:
         parts.append(creative)
+    if memories:
+        parts.append(memories)
     return "\n\n".join(parts)
 
 
@@ -159,33 +164,96 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
 
     db: Database = state.db
     settings = {"mode": req.mode, "web": web, "workspace": req.workspace}
+    summary: str | None = None
+    summary_upto: str | None = None
     if req.conversation_id:
         conv = db.get_conversation(req.conversation_id)
         if conv is None:
             raise HTTPException(404, "Conversation not found")
         db.update_conversation(conv["id"], model=req.model, settings=settings)
-        history = history_to_messages(conv["messages"])
+        summary, summary_upto = conv.get("summary"), conv.get("summary_upto")
+        history, history_ids = history_with_ids(conv["messages"], summary_upto)
     else:
         conv = db.create_conversation(title_from(req.message), req.model, settings)
-        history = []
+        if req.folder_id and req.folder_id in {f["id"] for f in db.list_folders()}:
+            db.update_conversation(conv["id"], folder_id=req.folder_id)
+        history, history_ids = [], []
     conv_id = conv["id"]
     db.add_message(conv_id, "user", req.message)
 
-    messages = [
-        {"role": "system", "content": system_prompt(req, ws, web, creative_prompt(media_tools))},
-        *history,
-    ]
-    messages.append({"role": "user", "content": req.message})
+    us = state.user_settings
+    recalled = await memory.recall(request.app, req.message) if us.memory_enabled else []
+    system = system_prompt(
+        req, ws, web, creative_prompt(media_tools), memory.recall_prompt(recalled)
+    )
+
+    # Context budget for the conversation itself: window minus system prompt, tool
+    # definitions, the new message and room for the reply.
+    window = context.context_size(state.settings)
+    fixed = context.estimate_tokens(system) + context.estimate_tokens(toolset.schemas())
+    budget = window - context.RESERVE_FOR_REPLY - fixed - context.estimate_tokens(req.message)
+    context.trim_tool_results(history)
 
     run = state.agent_runs.create(auto_approve=req.auto_approve)
+    replies: list[str] = []
 
     def persist(msg: dict) -> None:
+        if msg["role"] == "assistant" and msg.get("content"):
+            replies.append(msg["content"])
         db.add_message(
             conv_id, msg["role"], msg["content"], msg.get("reasoning"), req.model, msg.get("meta")
         )
 
+    async def condense() -> None:
+        """Fold the oldest messages into the running summary when history doesn't fit."""
+        nonlocal history, summary
+        if context.message_tokens(history) + context.estimate_tokens(summary or "") <= budget:
+            return
+        cut = context.split_point(history, int(budget * context.SUMMARY_TARGET))
+        if cut <= 0:
+            return
+        await run.emit(
+            {
+                "type": "notice",
+                "message": "Condensing earlier messages to stay within the model's context…",
+            }
+        )
+        new_summary = await context.summarize(
+            state.http, provider, upstream, history[:cut], summary, window
+        )
+        if new_summary is None:
+            return  # fall back to trimming (below) and the server's own truncation
+        summary = new_summary
+        db.update_conversation(conv_id, summary=summary, summary_upto=history_ids[cut - 1])
+        history = history[cut:]
+
+    async def learn() -> None:
+        """Update long-term memory from this exchange (after the answer is shown)."""
+        if not (us.memory_enabled and us.memory_auto and replies):
+            return
+        changes = await memory.extract(
+            request.app,
+            provider=provider,
+            model=upstream,
+            user_message=req.message,
+            assistant_reply=replies[-1],
+            conversation_id=conv_id,
+        )
+        for change in changes:
+            await run.emit({"type": "memory", **change})
+
     async def work() -> None:
         try:
+            await condense()
+            messages = [{"role": "system", "content": system}]
+            if summary:
+                messages.append(context.summary_message(summary))
+            messages += history
+            messages.append({"role": "user", "content": req.message})
+            context.fit(
+                messages,
+                window - context.RESERVE_FOR_REPLY - context.estimate_tokens(toolset.schemas()),
+            )
             await run_agent(
                 run,
                 provider=provider,
@@ -195,7 +263,12 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
                 toolset=toolset,
                 persist=persist,
                 max_steps=state.settings.agent_max_steps,
+                context_budget=window
+                - context.RESERVE_FOR_REPLY
+                - context.estimate_tokens(toolset.schemas()),
             )
+            await run.emit({"type": "answer_done"})
+            await learn()
         except ModelError as exc:
             await run.emit({"type": "error", "message": str(exc)})
         except Exception as exc:  # surface anything unexpected to the user

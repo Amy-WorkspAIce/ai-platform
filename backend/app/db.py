@@ -29,6 +29,26 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages(conversation_id, created_at);
+CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    collapsed INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS memories (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL DEFAULT 'default',
+    text TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    source_conversation_id TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    last_used_at REAL,
+    embedding BLOB,
+    embedding_model TEXT
+);
+CREATE INDEX IF NOT EXISTS memories_by_user ON memories(user_id, updated_at);
 CREATE TABLE IF NOT EXISTS audio (
     id TEXT PRIMARY KEY,
     model TEXT NOT NULL,
@@ -61,6 +81,10 @@ def new_id() -> str:
 MIGRATIONS = [
     ("messages", "meta", "TEXT"),  # tool calls, tool results (JSON)
     ("conversations", "settings", "TEXT"),  # mode, workspace, web (JSON)
+    ("conversations", "folder_id", "TEXT"),
+    # Context management: summary of messages up to (and including) summary_upto.
+    ("conversations", "summary", "TEXT"),
+    ("conversations", "summary_upto", "TEXT"),
 ]
 
 
@@ -129,8 +153,13 @@ class Database:
 
     def update_conversation(self, conv_id: str, **fields) -> dict | None:
         allowed = {
-            k: v for k, v in fields.items() if k in ("title", "model", "settings") and v is not None
+            k: v
+            for k, v in fields.items()
+            if k in ("title", "model", "settings", "folder_id", "summary", "summary_upto")
+            and v is not None
         }
+        if allowed.get("folder_id") == "":
+            allowed["folder_id"] = None  # unfile
         if "settings" in allowed:
             allowed["settings"] = json.dumps(allowed["settings"])
         if allowed:
@@ -256,6 +285,123 @@ class Database:
     def delete_audio(self, audio_id: str) -> bool:
         with self.connect() as db:
             return db.execute("DELETE FROM audio WHERE id = ?", (audio_id,)).rowcount > 0
+
+    # ---- folders ----
+
+    def list_folders(self) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM folders ORDER BY position, created_at").fetchall()
+        return [dict(r) | {"collapsed": bool(r["collapsed"])} for r in rows]
+
+    def create_folder(self, name: str) -> dict:
+        with self.connect() as db:
+            pos = db.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM folders").fetchone()[0]
+            row = {
+                "id": new_id(),
+                "name": name,
+                "position": pos,
+                "collapsed": 0,
+                "created_at": time.time(),
+            }
+            db.execute(
+                "INSERT INTO folders VALUES (:id, :name, :position, :collapsed, :created_at)", row
+            )
+        return row | {"collapsed": False}
+
+    def update_folder(self, folder_id: str, **fields) -> dict | None:
+        allowed = {
+            k: v
+            for k, v in fields.items()
+            if k in ("name", "position", "collapsed") and v is not None
+        }
+        if "collapsed" in allowed:
+            allowed["collapsed"] = int(bool(allowed["collapsed"]))
+        with self.connect() as db:
+            if allowed:
+                sets = ", ".join(f"{k} = :{k}" for k in allowed)
+                db.execute(f"UPDATE folders SET {sets} WHERE id = :id", allowed | {"id": folder_id})  # noqa: S608 - keys whitelisted
+            row = db.execute("SELECT * FROM folders WHERE id = ?", (folder_id,)).fetchone()
+        return dict(row) | {"collapsed": bool(row["collapsed"])} if row else None
+
+    def delete_folder(self, folder_id: str) -> bool:
+        """Delete a folder; its chats are kept (unfiled)."""
+        with self.connect() as db:
+            db.execute(
+                "UPDATE conversations SET folder_id = NULL WHERE folder_id = ?", (folder_id,)
+            )
+            return db.execute("DELETE FROM folders WHERE id = ?", (folder_id,)).rowcount > 0
+
+    # ---- memories ----
+
+    def list_memories(self, user_id: str = "default") -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM memories WHERE user_id = ? ORDER BY updated_at DESC", (user_id,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_memory(
+        self,
+        text: str,
+        category: str = "general",
+        source: str | None = None,
+        embedding: bytes | None = None,
+        embedding_model: str | None = None,
+        user_id: str = "default",
+    ) -> dict:
+        now = time.time()
+        row = {
+            "id": new_id(),
+            "user_id": user_id,
+            "text": text,
+            "category": category,
+            "source_conversation_id": source,
+            "created_at": now,
+            "updated_at": now,
+            "last_used_at": None,
+            "embedding": embedding,
+            "embedding_model": embedding_model,
+        }
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO memories VALUES (:id, :user_id, :text, :category, "
+                ":source_conversation_id, :created_at, :updated_at, :last_used_at, :embedding, "
+                ":embedding_model)",
+                row,
+            )
+        return row
+
+    def update_memory(self, memory_id: str, **fields) -> dict | None:
+        allowed = {
+            k: v
+            for k, v in fields.items()
+            if k in ("text", "category", "embedding", "embedding_model", "last_used_at")
+        }
+        if "text" in allowed or "category" in allowed:
+            allowed["updated_at"] = time.time()
+        with self.connect() as db:
+            if allowed:
+                sets = ", ".join(f"{k} = :{k}" for k in allowed)
+                query = f"UPDATE memories SET {sets} WHERE id = :id"  # noqa: S608 - keys whitelisted
+                db.execute(query, allowed | {"id": memory_id})
+            row = db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        return dict(row) if row else None
+
+    def touch_memories(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        with self.connect() as db:
+            db.executemany(
+                "UPDATE memories SET last_used_at = ? WHERE id = ?", [(time.time(), i) for i in ids]
+            )
+
+    def delete_memory(self, memory_id: str) -> bool:
+        with self.connect() as db:
+            return db.execute("DELETE FROM memories WHERE id = ?", (memory_id,)).rowcount > 0
+
+    def delete_all_memories(self, user_id: str = "default") -> int:
+        with self.connect() as db:
+            return db.execute("DELETE FROM memories WHERE user_id = ?", (user_id,)).rowcount
 
 
 def _conv(row: sqlite3.Row) -> dict:

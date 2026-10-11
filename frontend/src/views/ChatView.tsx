@@ -17,6 +17,9 @@ import { canRecord, extensionFor, useRecorder } from "../recorder";
 type Props = {
   api: Api;
   conversationId: string | null;
+  folderId?: string | null;
+  folderName?: string;
+  onOpenMemory?: () => void;
   models: ModelInfo[] | null;
   sttModel?: string;
   ttsModel?: string;
@@ -29,7 +32,7 @@ type ToolStatus = "awaiting" | "running" | "ok" | "error";
 type Item =
   | { kind: "user"; content: string }
   | { kind: "assistant"; content: string; reasoning: string }
-  | { kind: "notice"; text: string }
+  | { kind: "notice"; text: string; memory?: boolean }
   | {
       kind: "tool";
       id: string;
@@ -130,7 +133,18 @@ function itemsFrom(messages: StoredMessage[]): Item[] {
   return items;
 }
 
-export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSaved, onBrowseModels }: Props) {
+export function ChatView({
+  api,
+  conversationId,
+  folderId,
+  folderName,
+  onOpenMemory,
+  models,
+  sttModel,
+  ttsModel,
+  onSaved,
+  onBrowseModels,
+}: Props) {
   const [model, setModel] = useState("");
   const [items, setItems] = useState<Item[]>([]);
   const [input, setInput] = useState("");
@@ -146,6 +160,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[] | null>(null);
   const convId = useRef(conversationId);
   const runId = useRef<string | null>(null);
+  const sendCount = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const ids = models?.map((m) => m.id) ?? [];
@@ -245,6 +260,15 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
       case "notice":
         setItems((prev) => [...prev, { kind: "notice", text: e.message }]);
         break;
+      case "answer_done":
+        // The reply is complete; memory may still be updating in the background.
+        setBusy(false);
+        break;
+      case "memory": {
+        const verb = e.action === "remembered" ? "Remembered" : e.action === "updated" ? "Updated memory" : "Forgot";
+        setItems((prev) => [...prev, { kind: "notice", text: `🧠 ${verb}: ${e.text}`, memory: true }]);
+        break;
+      }
       case "error":
         setError(e.message);
         break;
@@ -271,6 +295,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
         mode,
         workspace: mode === "agent" ? workspace : null,
         auto_approve: autoApprove,
+        folder_id: convId.current ? undefined : folderId,
       },
       onEvent,
       abort.current?.signal,
@@ -314,6 +339,9 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
     setBusy(true);
     setError("");
     abort.current = new AbortController();
+    // A reply finishes (answer_done) before its stream closes (memory updates last), so a
+    // new message may start meanwhile; only the latest send may reset shared state.
+    const mine = ++sendCount.current;
     try {
       // All chats go through the server: it adds the system prompt, saves the chat, and offers
       // the tools (web, image/video/voice delegation, and workspace tools in agent mode).
@@ -323,6 +351,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
+      if (sendCount.current !== mine) return;
       setBusy(false);
       runId.current = null;
       setItems((prev) =>
@@ -485,6 +514,7 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
       ) : items.length === 0 ? (
         <div className="welcome">
           <h1>{mode === "agent" ? "What should I build?" : "How can I help?"}</h1>
+          {folderName && <p className="muted small">New chat in 📁 {folderName}</p>}
           {noModels ? (
             <div className="welcome-card">
               <p>
@@ -507,8 +537,14 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
               item.kind === "user" ? (
                 <UserMessage key={i} api={api} content={item.content} />
               ) : item.kind === "notice" ? (
-                <p key={i} className="notice muted small">
-                  {item.text}
+                <p key={i} className={`notice muted small ${item.memory ? "memory-note" : ""}`}>
+                  {item.memory && onOpenMemory ? (
+                    <button className="link" onClick={onOpenMemory} title="See what Amy remembers">
+                      {item.text}
+                    </button>
+                  ) : (
+                    item.text
+                  )}
                 </p>
               ) : item.kind === "assistant" ? (
                 <AssistantMessage

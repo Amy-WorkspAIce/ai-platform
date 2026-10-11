@@ -57,6 +57,24 @@ class UserSettings:
         self._save_prefs(prefs)
 
     @property
+    def memory_enabled(self) -> bool:
+        """Use long-term memory in chats (recall)."""
+        return bool(self._prefs().get("memory_enabled", True))
+
+    @property
+    def memory_auto(self) -> bool:
+        """Learn new facts automatically after each reply."""
+        return bool(self._prefs().get("memory_auto", True))
+
+    def set_memory(self, enabled: bool | None = None, auto: bool | None = None) -> None:
+        prefs = self._prefs()
+        if enabled is not None:
+            prefs["memory_enabled"] = enabled
+        if auto is not None:
+            prefs["memory_auto"] = auto
+        self._save_prefs(prefs)
+
+    @property
     def web_access(self) -> bool:
         return bool(self._prefs().get("web_access", True))
 

@@ -1,23 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Api, AuthError, getApiKey, setApiKey, type Conversation, type ModelInfo } from "./api";
+import { Api, AuthError, getApiKey, setApiKey, type Conversation, type Folder, type ModelInfo } from "./api";
+import { ChatList } from "./ChatList";
 import { loadModelTable } from "./modelTable";
 import { ChatView } from "./views/ChatView";
 import { LibraryView } from "./views/LibraryView";
+import { MemoryView } from "./views/MemoryView";
 import { ModelsView } from "./views/ModelsView";
 import { SettingsView } from "./views/SettingsView";
 
-export type View = "chat" | "library" | "models" | "settings";
+export type View = "chat" | "library" | "memory" | "models" | "settings";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
   const api = useMemo(() => new Api(key), [key]);
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [error, setError] = useState("");
   const [view, setView] = useState<View>("chat");
   // chatKey remounts ChatView on explicit navigation only, so a chat that saves itself
   // mid-stream (getting an id) isn't remounted.
-  const [chat, setChat] = useState<{ key: number; id: string | null }>({ key: 0, id: null });
+  const [chat, setChat] = useState<{ key: number; id: string | null; folderId: string | null }>({
+    key: 0,
+    id: null,
+    folderId: null,
+  });
   const [menuOpen, setMenuOpen] = useState(false);
   const [version, setVersion] = useState("");
 
@@ -53,7 +60,9 @@ export function App() {
 
   const refreshConversations = useCallback(async () => {
     try {
-      setConversations(await api.conversations());
+      const [c, f] = await Promise.all([api.conversations(), api.folders()]);
+      setConversations(c);
+      setFolders(f);
     } catch (e) {
       handleError(e);
     }
@@ -83,35 +92,13 @@ export function App() {
     setView(v);
     setMenuOpen(false);
   };
-  const openChat = (id: string | null) => {
-    setChat((c) => ({ key: c.key + 1, id }));
+  const openChat = (id: string | null, folderId: string | null = null) => {
+    setChat((c) => ({ key: c.key + 1, id, folderId }));
     go("chat");
   };
 
   const byCapability = (cap: ModelInfo["capability"]) =>
     models?.filter((m) => m.capability === cap) ?? null;
-
-  async function rename(c: Conversation) {
-    const title = prompt("Rename chat", c.title)?.trim();
-    if (!title || title === c.title) return;
-    try {
-      await api.renameConversation(c.id, title);
-      void refreshConversations();
-    } catch (e) {
-      handleError(e);
-    }
-  }
-
-  async function remove(c: Conversation) {
-    if (!confirm(`Delete "${c.title}"?`)) return;
-    try {
-      await api.deleteConversation(c.id);
-      if (chat.id === c.id) openChat(null);
-      void refreshConversations();
-    } catch (e) {
-      handleError(e);
-    }
-  }
 
   return (
     <div className="shell">
@@ -123,35 +110,23 @@ export function App() {
           + New chat
         </button>
         <nav>
-          {(["chat", "library", "models", "settings"] as View[]).map((v) => (
+          {(["chat", "library", "memory", "models", "settings"] as View[]).map((v) => (
             <button key={v} className={view === v ? "active" : ""} onClick={() => go(v)}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
           ))}
         </nav>
-        {conversations.length > 0 && (
-          <div className="history">
-            <div className="history-label">Recent chats</div>
-            {conversations.map((c) => (
-              <div
-                key={c.id}
-                className={`history-item ${view === "chat" && chat.id === c.id ? "active" : ""}`}
-              >
-                <button className="history-title" title={c.title} onClick={() => openChat(c.id)}>
-                  {c.title}
-                </button>
-                <span className="history-actions">
-                  <button aria-label="Rename" title="Rename" onClick={() => rename(c)}>
-                    ✎
-                  </button>
-                  <button aria-label="Delete" title="Delete" onClick={() => remove(c)}>
-                    ✕
-                  </button>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <ChatList
+          api={api}
+          conversations={conversations}
+          folders={folders}
+          activeId={view === "chat" ? chat.id : null}
+          onOpen={(id) => openChat(id)}
+          onNewChat={(folderId) => openChat(null, folderId)}
+          onChanged={refreshConversations}
+          onDeleted={(id) => chat.id === id && openChat(null)}
+          onError={handleError}
+        />
         <div className="sidebar-footer">
           <button className="link" onClick={logout}>
             Change API key
@@ -174,6 +149,9 @@ export function App() {
             key={chat.key}
             api={api}
             conversationId={chat.id}
+            folderId={chat.folderId}
+            folderName={folders.find((f) => f.id === chat.folderId)?.name}
+            onOpenMemory={() => go("memory")}
             models={byCapability("chat")}
             sttModel={byCapability("transcription")?.[0]?.id}
             ttsModel={byCapability("speech")?.[0]?.id}
@@ -185,6 +163,7 @@ export function App() {
           />
         )}
         {view === "library" && <LibraryView api={api} onNewChat={() => openChat(null)} />}
+        {view === "memory" && <MemoryView api={api} onOpenChat={(id) => openChat(id)} />}
         {view === "settings" && <SettingsView api={api} />}
         {view === "models" && (
           <ModelsView

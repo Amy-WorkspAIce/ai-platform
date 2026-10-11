@@ -24,4 +24,7 @@ plus web UI) packaged as a single container, Unraid-first but portable.
 - Chat is the only creation UI: new media capabilities are tools in `app/tools/creative.py`
   (operations in `app/studio.py`, model choice in `app/delegation.py`), results returned as
   `attachments` and shown via `frontend/src/media.tsx`.
+- Memory (`app/memory.py`) and context fitting (`app/context.py`) run inside `api/agent.py`.
+  Never let memory store secrets (keep the `SECRET` filter), and keep extraction after
+  `answer_done` so it never delays the reply.
 - License is AGPL-3.0; only add dependencies with compatible licenses.

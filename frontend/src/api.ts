@@ -74,6 +74,34 @@ export class Api {
       method: "PATCH",
       body: JSON.stringify({ title }),
     });
+  moveConversation = (id: string, folderId: string | null) =>
+    this.request<Conversation>(`/api/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ folder_id: folderId ?? "" }),
+    });
+
+  // ---- folders ----
+  folders = () => this.request<Folder[]>("/api/folders");
+  createFolder = (name: string) =>
+    this.request<Folder>("/api/folders", { method: "POST", body: JSON.stringify({ name }) });
+  updateFolder = (id: string, patch: Partial<Pick<Folder, "name" | "collapsed" | "position">>) =>
+    this.request<Folder>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  deleteFolder = (id: string) => this.request<void>(`/api/folders/${id}`, { method: "DELETE" });
+
+  // ---- memory ----
+  memory = (q?: string) => this.request<MemoryState>(`/api/memory${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  addFact = (text: string, category: string) =>
+    this.request<Fact>("/api/memory", { method: "POST", body: JSON.stringify({ text, category }) });
+  updateFact = (id: string, patch: { text?: string; category?: string }) =>
+    this.request<Fact>(`/api/memory/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  deleteFact = (id: string) => this.request<void>(`/api/memory/${id}`, { method: "DELETE" });
+  forgetEverything = () => this.request<{ deleted: number }>("/api/memory?confirm=true", { method: "DELETE" });
+  memorySettings = (patch: { enabled?: boolean; auto?: boolean }) =>
+    this.request<{ enabled: boolean; auto: boolean }>("/api/memory/settings", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
+
   deleteConversation = (id: string) =>
     this.request<void>(`/api/conversations/${id}`, { method: "DELETE" });
   addMessage = (id: string, message: ChatMessage & { model?: string }) =>
@@ -375,10 +403,31 @@ export type ModelInfo = {
 
 export type ChatSettings = { mode?: "chat" | "agent"; web?: boolean; workspace?: string | null };
 
+export type Folder = { id: string; name: string; position: number; collapsed: boolean; created_at: number };
+
+export type Fact = {
+  id: string;
+  text: string;
+  category: string;
+  source_conversation_id: string | null;
+  created_at: number;
+  updated_at: number;
+  last_used_at: number | null;
+};
+
+export type MemoryState = {
+  facts: Fact[];
+  enabled: boolean;
+  auto: boolean;
+  embedding_model: string | null;
+  categories: string[];
+};
+
 export type Conversation = {
   id: string;
   title: string;
   model: string | null;
+  folder_id?: string | null;
   settings: ChatSettings;
   created_at: number;
   updated_at: number;
@@ -407,6 +456,7 @@ export type AgentRequest = {
   mode: "chat" | "agent";
   workspace?: string | null;
   auto_approve: boolean;
+  folder_id?: string | null;
 };
 
 export type AgentEvent =
@@ -422,6 +472,8 @@ export type AgentEvent =
     }
   | { type: "tool_result"; id: string; ok: boolean; output: string; attachments?: Attachment[] }
   | { type: "notice"; message: string }
+  | { type: "answer_done" }
+  | { type: "memory"; action: "remembered" | "updated" | "removed"; text: string }
   | { type: "error"; message: string }
   | { type: "done" };
 

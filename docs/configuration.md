@@ -22,6 +22,7 @@ All settings are environment variables. None are required.
 | `AMY_GITHUB_TOKEN` | *(none)* | Token for agent git operations on github.com (clone private repos, push). Use a fine-grained token. |
 | `AMY_AGENT_MAX_STEPS` | `40` | Maximum model turns per agent request. |
 | `AMY_AGENT_COMMAND_TIMEOUT` | `600` | Maximum seconds per agent command. |
+| `AMY_CONTEXT_TOKENS` | `0` | Context window the chat is fitted to, in tokens. `0` uses `OLLAMA_CONTEXT_LENGTH` (or 16384). Set it when using an external engine with a different window. |
 | `OLLAMA_CONTEXT_LENGTH` | `16384` | Context size for chat models (full image). Agent mode needs 16k+. Flash attention and a q8_0 KV cache are enabled to keep memory use down. |
 | `AMY_UPSTREAM_TIMEOUT` | `600` | Seconds to wait on a model engine. |
 | `AMY_DATA_DIR` | `/data` | Persistent state directory. |

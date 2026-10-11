@@ -56,15 +56,19 @@ backend/            Python 3.11+ / FastAPI
   app/jobs.py       background install jobs with pollable progress
   app/engines/      on-demand engines for images/audio: installer, worker supervisor,
                     and the worker scripts that run inside each engine's own venv
-  app/db.py         SQLite: conversations, messages (incl. tool calls), image + video galleries
+  app/db.py         SQLite: folders, conversations, messages (incl. tool calls), memories,
+                    image + video galleries
   app/user_settings.py  Settings-page values (Hugging Face token in /data/secrets)
   app/agent.py      tool-calling loop, approvals, streaming events
+  app/memory.py     long-term memory: fact extraction, embeddings, recall
+  app/context.py    context window budgeting: trim tool output, summarize old messages
   app/tools/        web (search providers, page fetch with LAN blocking), workspace
                     (confined file tools, shell commands with scrubbed env)
   app/api/          routers: system, models, conversations, agent, media, openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
-  src/views/        ChatView, LibraryView, ModelsView, SettingsView (media.tsx: inline media)
+  src/views/        ChatView, LibraryView, MemoryView, ModelsView, SettingsView
+                    (media.tsx: inline media, ChatList.tsx: sidebar folders)
 scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
 deploy/unraid/      Community Applications template
@@ -80,6 +84,31 @@ video, speech, and web search. `app/delegation.py` picks the model for each kind
 operations shared with the `/v1` API. Results come back as attachments shown inline and saved
 to the Library. GPU sharing: media jobs unload Ollama models first; afterwards a fully-on-GPU
 pipeline is "parked" in RAM so the chat model can reload.
+
+## Memory
+
+Facts about the user live in the `memories` table in the same SQLite database (one short
+sentence each, with a category and the chat it came from). After each reply, once the answer
+has been streamed (`answer_done`), the chat model is asked for JSON `{add, update, remove}`
+against the facts it already knows; results stream as `memory` events and appear in chat.
+Anything that looks like a secret (keys, passwords, tokens, card numbers) is dropped.
+
+Recall: with 40 facts or fewer, all of them go into the system prompt. Beyond that, the most
+relevant 12 are chosen by cosine similarity of embeddings when an Ollama embedding model is
+installed (vectors stored as float32 blobs next to each fact, recomputed if the model changes),
+otherwise by keyword overlap. A vector database is unnecessary at personal scale: a few
+thousand vectors compare in milliseconds in plain Python. `user_id` is already a column for
+when multiple users arrive.
+
+## Context management
+
+Before each model call the chat is fitted to the context window (`AMY_CONTEXT_TOKENS`, else
+`OLLAMA_CONTEXT_LENGTH`, else 16384), with room reserved for the system prompt, tool schemas
+and the reply. Token counts are estimated (about 3.5 characters per token). First, old tool
+results are cut down, keeping the last three intact. If the chat still doesn't fit, the oldest
+messages are summarized by the chat model into a running summary saved on the conversation
+(`summary`, `summary_upto`). Later turns send the summary plus the messages after it, so the
+summary is only extended, never rebuilt. The full history stays in the database and the UI.
 
 ## Engines (images, audio)
 

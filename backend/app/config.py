@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # Fetch model listings (Ollama library, Hugging Face) at startup and keep them fresh.
     catalog_warmup: bool = True
 
+    # Context window used for context management (0 = OLLAMA_CONTEXT_LENGTH, else 16384).
+    context_tokens: int = 0
+
     # Agent mode.
     agent_max_steps: int = 40
     agent_command_timeout: float = 600

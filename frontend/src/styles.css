@@ -404,3 +404,36 @@ a.button.secondary { background: var(--surface-2); }
 .model-defaults { display: flex; flex-direction: column; gap: 0.6rem; }
 .model-default { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .model-default select { min-width: 240px; max-width: 100%; }
+
+/* ---- folders in the sidebar ---- */
+.history-label { display: flex; justify-content: space-between; align-items: center; }
+.history-add { background: none; border: none; color: var(--muted); font-size: 0.75rem; padding: 0.1rem 0.3rem; }
+.history-add:hover { color: var(--text); }
+.history-sublabel { font-size: 0.72rem; color: var(--muted); padding: 0.5rem 0.75rem 0.15rem; }
+.folder { border-radius: 8px; }
+.folder.drop, .unfiled.drop { background: var(--user-bg); outline: 1px dashed var(--accent); }
+.unfiled { min-height: 1.5rem; border-radius: 8px; }
+.folder-head { display: flex; align-items: center; border-radius: 8px; }
+.folder-head:hover { background: var(--surface-2); }
+.folder-head:hover .history-actions { display: flex; }
+.folder-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.35rem; background: none; border: none; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; font-weight: 600; }
+.folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-count { margin-left: auto; color: var(--muted); font-size: 0.72rem; font-weight: 400; }
+.caret { color: var(--muted); width: 0.8rem; }
+.folder-chats { padding-left: 0.8rem; }
+.folder-empty { margin: 0; padding: 0.25rem 0.75rem 0.4rem; font-size: 0.75rem; color: var(--muted); }
+.move-select { flex: 1; min-width: 0; font-size: 0.85rem; padding: 0.25rem 0.4rem; margin: 0.15rem 0.3rem; }
+.history-item[draggable="true"] { cursor: grab; }
+
+/* ---- memory ---- */
+.memory-note .link { font-size: inherit; color: var(--muted); padding: 0; }
+.memory-note .link:hover { color: var(--accent); }
+.memory-switches { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.fact-list { display: flex; flex-direction: column; margin-top: 0.75rem; }
+.fact { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0; }
+.fact + .fact { border-top: 1px solid var(--border); }
+.fact-text { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.fact-text .tag { margin-right: 0.25rem; }
+.fact-edit, .add-fact { display: flex; gap: 0.5rem; flex: 1; flex-wrap: wrap; }
+.fact-edit input, .add-fact input { flex: 1; min-width: 200px; }
+.forget-all { margin-top: 1.5rem; }
