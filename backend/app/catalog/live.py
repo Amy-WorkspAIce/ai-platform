@@ -190,6 +190,9 @@ def ollama_family(m: dict, exact_sizes: dict[str, float]) -> dict:
                 "params": label.upper() if params else label,
                 "size_gb": exact if exact else estimate_ollama_gb(params),
                 "size_estimated": exact is None,
+                # Ollama only publishes pulls per family (all sizes combined).
+                "downloads": m["pulls"],
+                "downloads_scope": "family",
             }
         )
     cloud_only = "cloud" in caps and not local_sizes
@@ -268,6 +271,8 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "gated": gated,
         "requires_token": gated and not hf_token_set,
         "engine_task": task,
+        "downloads": model.get("downloads", 0),
+        "downloads_scope": "model",
     }
     if size:
         # Rough until installed: components load one at a time, and the largest is usually
@@ -392,14 +397,31 @@ class LiveCatalog:
         self._save(self._sizes_file, self._sizes)
         log.info("Catalog: exact sizes for %d Ollama tags", len(self._sizes))
 
+    async def keep_warm(self, interval: float = HF_TTL) -> None:
+        """Fetch all standard listings at startup and refresh them periodically, so the
+        Models page never waits on ollama.com or Hugging Face."""
+        await asyncio.sleep(2)  # let the server finish starting
+        while True:
+            started = time.time()
+            try:
+                models = await self.ollama_models()
+                for cat in HF_QUERIES:
+                    await self.hf_families(cat, force=True)
+                log.info(
+                    "Catalog warmed: %d Ollama families (%.1fs)", len(models), time.time() - started
+                )
+            except Exception:  # never let the warm-up loop die
+                log.exception("Catalog warm-up failed")
+            await asyncio.sleep(interval)
+
     # ---- Hugging Face ----
 
     async def hf_families(
-        self, category: str, query: str | None = None, limit: int = 60
+        self, category: str, query: str | None = None, limit: int = 60, force: bool = False
     ) -> list[dict]:
         token = self.hf_token()
         key = f"{category}|{query or ''}|{bool(token)}"
-        hit = self._mem.get(key, HF_TTL)
+        hit = None if force else self._mem.get(key, HF_TTL * 2)
         if hit is not None:
             return hit
         out: dict[str, dict] = {}
@@ -502,6 +524,8 @@ class LiveCatalog:
                         "params": q,
                         "size_gb": round(gb, 2),
                         "size_estimated": False,
+                        "downloads": m.get("downloads", 0),
+                        "downloads_scope": "family",
                     }
                     for q, gb in sorted(quants.items(), key=lambda kv: kv[1])
                 ],

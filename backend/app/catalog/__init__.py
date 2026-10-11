@@ -180,43 +180,103 @@ def perfect_match(variants: list[dict]) -> dict | None:
     return min(candidates, key=lambda v: (FIT_TIER[v["fit"]], -(v.get("size_gb") or 0)))
 
 
-def _family_sort_key(sort: str):
-    def best(f):
-        return next(
-            (v for v in f["variants"] if v.get("best")), f["variants"][0] if f["variants"] else None
-        )
+def merge(curated: list[dict], live: list[dict]) -> list[dict]:
+    """Curated families first; live variants already covered by curated ones are dropped.
 
-    def popularity(f):
-        return -(f.get("popularity") or 0)
+    Curated models borrow download counts from the live listings (same tag, or the Ollama
+    family of the same name).
+    """
+    by_tag = {v["tag"]: v for f in live for v in f["variants"]}
+    ollama_pulls = {f["name"]: f.get("popularity") for f in live if f.get("source") == "ollama"}
+    curated = [
+        {**f, "variants": [_with_downloads(v, by_tag, ollama_pulls) for v in f["variants"]]}
+        for f in curated
+    ]
+    seen = {v["tag"] for f in curated for v in f["variants"]}
+    out = list(curated)
+    for fam in live:
+        variants = [v for v in fam["variants"] if v["tag"] not in seen]
+        if variants or (fam.get("unsupported") and not fam["variants"]):
+            out.append({**fam, "variants": variants})
+            seen.update(v["tag"] for v in variants)
+    return out
+
+
+# ---------------------------------------------------------------- the flat model table
+
+FAMILY_FIELDS = (
+    "name",
+    "publisher",
+    "license",
+    "description",
+    "engine",
+    "source",
+    "url",
+    "tools",
+    "popularity",
+    "unsupported",
+    "engine_note",
+    "engine_installed",
+)
+
+
+def flatten(families: list[dict]) -> list[dict]:
+    """One row per installable model (family + variant), for a single sortable table."""
+    rows = []
+    for f in families:
+        base = {k: f.get(k) for k in FAMILY_FIELDS} | {"family_id": f["id"]}
+        if not f["variants"]:  # listed but not runnable here (e.g. cloud-only)
+            rows.append(
+                base
+                | {
+                    "tag": f["id"],
+                    "params": "",
+                    "size_gb": None,
+                    "needed_gb": None,
+                    "fit": "unknown",
+                    "installed": False,
+                    "disk_ok": True,
+                    "use_cases": f["use_cases"],
+                }
+            )
+        for v in f["variants"]:
+            rows.append(base | v | {"use_cases": v.get("use_cases", f["use_cases"])})
+    return rows
+
+
+def _tier(row: dict) -> int:
+    if row.get("unsupported"):
+        return 9
+    return FIT_TIER[row["fit"]] + (5 if row.get("requires_token") else 0)
+
+
+def _row_sort_key(sort: str):
+    def size(row):
+        return row.get("size_gb")
 
     if sort == "name":
-        return lambda f: f["name"].lower()
+        return lambda r: (r["name"].lower(), size(r) or 0)
     if sort == "popular":
-        return popularity
+        return lambda r: (-_downloads(r), r["name"].lower(), size(r) or 0)
     if sort == "size_asc":
-        return lambda f: min(
-            (v["size_gb"] for v in f["variants"] if v["size_gb"]), default=float("inf")
-        )
+        return lambda r: (size(r) is None, size(r) or 0)
     if sort == "size_desc":
-        return lambda f: -max((v["size_gb"] for v in f["variants"] if v["size_gb"]), default=0)
+        return lambda r: (size(r) is None, -(size(r) or 0))
     if sort == "fit":
         # Most headroom first: best tier, then the smallest model in it.
-        return lambda f: (
-            FIT_TIER[best(f)["fit"]] if best(f) else 9,
-            (best(f) or {}).get("needed_gb") or float("inf"),
-        )
-    # "perfect": best tier first, then the model that uses the most of your hardware (memory
-    # needed while running: comparable across chat/image/video, unlike download size),
-    # then popularity.
-    return lambda f: (
-        FIT_TIER[best(f)["fit"]] if best(f) else 9,
-        -(_capability(best(f)) if best(f) else 0),
-        popularity(f),
-    )
+        return lambda r: (_tier(r), r.get("needed_gb") or float("inf"))
+    # "perfect": runs well first; within that, the model that uses the most of your
+    # hardware (memory needed while running, comparable across chat/image/video, unlike
+    # download size) - a 0.6B model fits, but an 8B that also fits is far more capable.
+    return lambda r: (_tier(r), -_capability(r), -_downloads(r))
 
 
-def _capability(v: dict) -> float:
-    return v.get("needed_gb") or v.get("size_gb") or 0
+def _downloads(row: dict) -> int:
+    return row.get("downloads") or row.get("popularity") or 0
+
+
+def _capability(row: dict) -> float:
+    return row.get("needed_gb") or row.get("size_gb") or 0
 
 
 def browse(
@@ -229,36 +289,34 @@ def browse(
     offset: int = 0,
     limit: int = 50,
 ) -> dict:
-    items = families
+    rows = flatten(families)
     if category and category != "all":
-        items = [f for f in items if category in f["use_cases"]]
+        rows = [r for r in rows if category in r["use_cases"]]
     if query:
         q = query.lower()
-        items = [
-            f
-            for f in items
-            if q in f["name"].lower()
-            or q in (f.get("description") or "").lower()
-            or q in (f.get("publisher") or "").lower()
+        rows = [
+            r
+            for r in rows
+            if q in r["name"].lower()
+            or q in r["tag"].lower()
+            or q in (r.get("description") or "").lower()
+            or q in (r.get("publisher") or "").lower()
         ]
     if runnable_only:
-        items = [
-            f
-            for f in items
-            if not f.get("unsupported")
-            and any(v["fit"] in ("gpu", "light", "partial") for v in f["variants"])
+        rows = [
+            r for r in rows if not r.get("unsupported") and r["fit"] in ("gpu", "light", "partial")
         ]
-    items = sorted(items, key=_family_sort_key(sort))
-    return {"total": len(items), "families": items[offset : offset + limit]}
+    rows.sort(key=_row_sort_key(sort))
+    return {"total": len(rows), "models": rows[offset : offset + limit]}
 
 
-def merge(curated: list[dict], live: list[dict]) -> list[dict]:
-    """Curated families first; live variants already covered by curated ones are dropped."""
-    seen = {v["tag"] for f in curated for v in f["variants"]}
-    out = list(curated)
-    for fam in live:
-        variants = [v for v in fam["variants"] if v["tag"] not in seen]
-        if variants or (fam.get("unsupported") and not fam["variants"]):
-            out.append({**fam, "variants": variants})
-            seen.update(v["tag"] for v in variants)
-    return out
+def _with_downloads(v: dict, by_tag: dict, ollama_pulls: dict) -> dict:
+    if "downloads" in v:
+        return v
+    match = by_tag.get(v["tag"])
+    if match and match.get("downloads") is not None:
+        return {**v, "downloads": match["downloads"], "downloads_scope": match["downloads_scope"]}
+    family = v["tag"].split(":", 1)[0]
+    if ollama_pulls.get(family):
+        return {**v, "downloads": ollama_pulls[family], "downloads_scope": "family"}
+    return v

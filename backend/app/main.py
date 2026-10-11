@@ -1,11 +1,13 @@
 """Application entrypoint: ``uvicorn app.main:create_app --factory``."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -37,11 +39,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.http,
             hf_token=lambda: app.state.user_settings.hf_token,
         )
+        warm = (
+            asyncio.create_task(app.state.live_catalog.keep_warm())
+            if settings.catalog_warmup
+            else None
+        )
         if settings.ollama_url:
             app.state.ollama_admin = OllamaAdmin(
                 settings.ollama_url, app.state.http, app.state.jobs
             )
         yield
+        if warm:
+            warm.cancel()
         await app.state.engines.stop_all()
         await app.state.http.aclose()
 
@@ -63,6 +72,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         torch_index_url=settings.torch_index_url,
         idle_seconds=settings.engine_idle_minutes * 60,
     )
+
+    # The model table and chat histories are large JSON; compress them.
+    app.add_middleware(GZipMiddleware, minimum_size=2048)
 
     if settings.cors_origins:
         app.add_middleware(

@@ -34,7 +34,9 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/system` | Version and provider status. |
 | GET | `/api/hardware` | Detected GPUs (VRAM), RAM, CPU count, free disk in `/data`. |
 | GET | `/api/catalog` | Curated model catalog annotated with `fit`, `installed`, `needed_gb` per variant, plus `recommendations` per use case. |
-| GET | `/api/catalog/browse` | Everything: curated + Ollama library + Hugging Face (image, video, speech; GGUF when searching). Query: `category`, `q`, `sort` (`perfect`, `fit`, `size_asc`, `size_desc`, `name`, `popular`), `runnable`, `offset`, `limit`. Each family's best variant for this machine has `best: true`; gated variants without a token have `requires_token: true`. |
+| GET | `/api/catalog/models` | The whole model table in one response (one row per installable model: curated + Ollama library + top Hugging Face image/video/speech), annotated with `fit`, `installed`, `requires_token`, `downloads` (`downloads_scope`: `model`, or `family` where only per-family counts exist). Cached server-side; the UI fetches it once and filters/sorts locally. |
+| GET | `/api/catalog/search?q=` | Search Hugging Face beyond the standard listing (GGUF chat models plus image/video/speech). Returns rows in the same shape. |
+| GET | `/api/catalog/browse` | The same table filtered and sorted server-side, for API clients. Query: `category`, `q`, `sort` (`perfect`, `fit`, `size_asc`, `size_desc`, `name`, `popular`), `runnable`, `offset`, `limit`. |
 | GET | `/api/settings` | Settings page data (Hugging Face status, search providers, version). |
 | PUT/DELETE | `/api/settings/huggingface` | Save (`{"token"}`, validated with Hugging Face) or remove the Hugging Face token. |
 | GET | `/api/models/installed` | Models installed in Ollama. |

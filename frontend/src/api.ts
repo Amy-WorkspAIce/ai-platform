@@ -161,11 +161,11 @@ export class Api {
       method: "POST",
       body: JSON.stringify({ model, engine }),
     });
-  browse = (params: BrowseParams) => {
-    const q = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => v !== undefined && v !== "" && q.set(k, String(v)));
-    return this.request<BrowseResult>(`/api/catalog/browse?${q}`);
-  };
+  /** The whole model table (filtered and sorted in the browser). */
+  catalogModels = () => this.request<ModelTable>("/api/catalog/models");
+  /** Search Hugging Face beyond the standard listing. */
+  searchModels = (q: string) =>
+    this.request<{ models: ModelRow[] }>(`/api/catalog/search?q=${encodeURIComponent(q)}`);
 
   // ---- settings ----
   settings = () => this.request<AppSettings>("/api/settings");
@@ -240,21 +240,26 @@ export type Fit = "gpu" | "light" | "partial" | "cpu" | "too_large" | "unknown";
 
 export type SortKey = "perfect" | "fit" | "size_asc" | "size_desc" | "name" | "popular";
 
-export type BrowseParams = {
-  category?: string;
-  q?: string;
-  sort?: SortKey;
-  runnable?: boolean;
-  offset?: number;
-  limit?: number;
+/** One installable model: a variant plus its family's details. */
+export type ModelRow = Variant & {
+  family_id: string;
+  name: string;
+  publisher: string;
+  license: string | null;
+  description: string;
+  engine: string;
+  source?: "curated" | "ollama" | "huggingface";
+  url?: string;
+  tools?: boolean;
+  popularity?: number;
+  downloads?: number;
+  downloads_scope?: "model" | "family";
+  unsupported?: string | null;
+  engine_note: string | null;
+  engine_installed: boolean;
 };
 
-export type BrowseResult = {
-  total: number;
-  families: Family[];
-  hardware: Hardware;
-  hf_token_set: boolean;
-};
+export type ModelTable = { models: ModelRow[]; hardware: Hardware; hf_token_set: boolean };
 
 export type HfStatus = { token_set: boolean; username: string | null; source: "env" | "ui" | null };
 

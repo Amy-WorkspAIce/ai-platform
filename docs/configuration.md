@@ -18,6 +18,7 @@ All settings are environment variables. None are required.
 | `AMY_BRAVE_API_KEY` | *(none)* | Brave Search API key. |
 | `AMY_WEB_ALLOW_PRIVATE` | `false` | Let `fetch_url` reach private/LAN addresses. |
 | `AMY_HF_TOKEN` | *(none)* | Hugging Face token for gated models. Normally set on the **Settings** page; this variable overrides it and makes it read-only there. |
+| `AMY_CATALOG_WARMUP` | `true` | Fetch model listings (Ollama library, Hugging Face) at startup and refresh them periodically. |
 | `AMY_GITHUB_TOKEN` | *(none)* | Token for agent git operations on github.com (clone private repos, push). Use a fine-grained token. |
 | `AMY_AGENT_MAX_STEPS` | `40` | Maximum model turns per agent request. |
 | `AMY_AGENT_COMMAND_TIMEOUT` | `600` | Maximum seconds per agent command. |

@@ -99,9 +99,13 @@ live listings: the Ollama library (parsed from ollama.com, exact sizes from the 
 registry in the background, cached in `/data/cache/catalog`) and Hugging Face (public API,
 filtered to formats Amy can run: diffusers pipelines, faster-whisper, GGUF). Families are
 categorized by purpose (General, Reasoning, Code, Agent & tools, Vision, Embeddings, Image,
-Video, Speech-to-text, Text-to-speech) and every variant gets a fit rating. **Perfect match**
-sorting ranks the best fit tier first, then the model that uses the most of the hardware.
-Within a family, the biggest variant that runs well is marked as the pick.
+Video, Speech-to-text, Text-to-speech) and every model gets a fit rating. The Models page
+shows one flat table (one row per installable model, e.g. "qwen3 8B"). **Perfect match**
+sorting ranks the best fit tier first, then the model that uses the most of the hardware, so
+the top rows are what to install. The server warms the listings at startup and refreshes them
+every few hours (`AMY_CATALOG_WARMUP`); the browser fetches the table once (~40 KB gzipped)
+and filters, sorts and searches locally. Hugging Face searches beyond the standard listing
+are explicit ("Search Hugging Face for …").
 
 ## Model IDs
 

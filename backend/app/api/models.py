@@ -100,6 +100,51 @@ async def get_catalog(request: Request) -> dict:
     }
 
 
+async def _annotated(request: Request, live_families: list[dict]) -> list[dict]:
+    hw = detect_hardware(request)
+    installed, _ = await installed_and_status(request)
+    engines = get_engines(request)
+    ready = {e for e in ENGINES if engines.engine_installed(e)}
+    merged = catalog.merge(catalog.load()["families"], live_families)
+    return [catalog.annotate(f, hw, installed, ready) for f in merged]
+
+
+async def _standard_live(lc: live.LiveCatalog) -> list[dict]:
+    """Everything listed without a search: Ollama library + top Hugging Face per category."""
+    groups = await asyncio.gather(_ollama(lc), *(lc.hf_families(cat) for cat in HF_CATEGORIES))
+    return [f for group in groups for f in group]
+
+
+@router.get("/catalog/models")
+async def all_models(request: Request) -> dict:
+    """The whole model table in one response, for filtering and sorting in the browser.
+
+    Network listings are cached server-side (warmed at startup), so this is fast; the
+    client fetches it once per visit and filters locally.
+    """
+    families = await _annotated(request, await _standard_live(request.app.state.live_catalog))
+    return {
+        "models": catalog.flatten(families),
+        "hardware": detect_hardware(request).to_dict(),
+        "hf_token_set": bool(hf_token(request)),
+    }
+
+
+@router.get("/catalog/search")
+async def search_hugging_face(
+    request: Request, q: str = Query(min_length=2, max_length=100)
+) -> dict:
+    """Search Hugging Face beyond the standard listing (GGUF chat models, image/video/speech)."""
+    lc: live.LiveCatalog = request.app.state.live_catalog
+    groups = await asyncio.gather(
+        lc.gguf_search(q), *(lc.hf_families(cat, q) for cat in HF_CATEGORIES)
+    )
+    families = await _annotated(request, [f for group in groups for f in group])
+    curated_tags = {v["tag"] for f in catalog.load()["families"] for v in f["variants"]}
+    rows = [r for r in catalog.flatten(families) if r["family_id"].startswith(("hf:", "gguf:"))]
+    return {"models": [r for r in rows if r["tag"] not in curated_tags]}
+
+
 @router.get("/catalog/browse")
 async def browse_catalog(
     request: Request,
@@ -110,26 +155,10 @@ async def browse_catalog(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=40, ge=1, le=200),
 ) -> dict:
-    lc: live.LiveCatalog = request.app.state.live_catalog
-    hw = detect_hardware(request)
-    installed, _ = await installed_and_status(request)
-    engines = get_engines(request)
-    ready = {e for e in ENGINES if engines.engine_installed(e)}
-
-    jobs = []
-    if category in ("all", "chat", "reasoning", "code", "agent", "vision", "embedding"):
-        jobs.append(_ollama(lc))
-    for cat in HF_CATEGORIES:
-        if category in ("all", cat):
-            jobs.append(lc.hf_families(cat, q))
-    if q and category in ("all", "chat"):
-        jobs.append(lc.gguf_search(q))
-    live_families = [f for group in await asyncio.gather(*jobs) for f in group]
-
-    merged = catalog.merge(catalog.load()["families"], live_families)
-    annotated = [catalog.annotate(f, hw, installed, ready) for f in merged]
+    """Server-side filtering/sorting of the same table (for API clients)."""
+    families = await _annotated(request, await _standard_live(request.app.state.live_catalog))
     result = catalog.browse(
-        annotated,
+        families,
         category=category,
         query=q,
         sort=sort,
@@ -137,7 +166,7 @@ async def browse_catalog(
         offset=offset,
         limit=limit,
     )
-    return result | {"hardware": hw.to_dict(), "hf_token_set": bool(hf_token(request))}
+    return result | {"hf_token_set": bool(hf_token(request))}
 
 
 async def _ollama(lc: live.LiveCatalog) -> list[dict]:

@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Api,
   setPref,
-  type BrowseResult,
   type Capability,
   type Catalog,
-  type Family,
   type Fit,
   type Hardware,
   type InstalledModel,
+  type ModelRow,
   type PullState,
   type SortKey,
-  type Variant,
 } from "../api";
+import { downloads, filterModels, loadModelTable } from "../modelTable";
 
 type Props = {
   api: Api;
@@ -31,22 +30,25 @@ const FIT_LABEL: Record<Fit, string> = {
 };
 
 const SORTS: { id: SortKey; label: string; hint: string }[] = [
-  { id: "perfect", label: "Perfect match", hint: "The most capable models that still run well on your hardware" },
-  { id: "fit", label: "Best fit", hint: "Most headroom first" },
-  { id: "popular", label: "Most popular", hint: "Downloads / pulls" },
+  { id: "perfect", label: "Perfect match", hint: "The most capable models that still run well on your hardware, first." },
+  { id: "fit", label: "Best fit", hint: "Most headroom first." },
+  { id: "popular", label: "Most downloaded", hint: "" },
   { id: "size_desc", label: "Largest first", hint: "" },
   { id: "size_asc", label: "Smallest first", hint: "" },
   { id: "name", label: "Name", hint: "" },
 ];
 
 const SOURCE_LABEL = { curated: "Recommended", ollama: "Ollama", huggingface: "Hugging Face" } as const;
+const PAGE = 50;
+
+/** What's needed to install or use a model, from a table row or a recommendation. */
+type Target = { tag: string; engine: string; use_cases: string[] };
 
 type Actions = {
-  install: (v: Variant, f: Family) => void;
+  install: (t: Target) => void;
   remove: (tag: string) => void;
-  use: (v: Variant, f: Family) => void;
+  use: (t: Target) => void;
   pulls: Record<string, PullState>;
-  hfTokenSet: boolean;
   onOpenSettings: () => void;
 };
 
@@ -55,7 +57,7 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
   const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [pulls, setPulls] = useState<Record<string, PullState>>({});
   const [error, setError] = useState("");
-  const [browseKey, setBrowseKey] = useState(0);
+  const [tableVersion, setTableVersion] = useState(0);
   const seenDone = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
@@ -69,21 +71,25 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
     }
   }, [api]);
 
+  // After installs/deletes, re-fetch the table so "installed" states are current.
+  const changed = useCallback(async () => {
+    await refresh();
+    await loadModelTable(api, true).catch(() => undefined);
+    setTableVersion((v) => v + 1);
+    onModelsChanged();
+  }, [api, refresh, onModelsChanged]);
+
   const pollPulls = useCallback(async () => {
     try {
       const list = await api.pulls();
       setPulls(Object.fromEntries(list.map((p) => [p.model, p])));
       const newlyDone = list.filter((p) => p.done && !seenDone.current.has(p.model));
       newlyDone.forEach((p) => seenDone.current.add(p.model));
-      if (newlyDone.some((p) => !p.error)) {
-        await refresh();
-        setBrowseKey((k) => k + 1);
-        onModelsChanged();
-      }
+      if (newlyDone.some((p) => !p.error)) await changed();
     } catch {
       // transient; next poll retries
     }
-  }, [api, refresh, onModelsChanged]);
+  }, [api, changed]);
 
   useEffect(() => {
     void refresh();
@@ -97,13 +103,12 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
     return () => clearInterval(t);
   }, [active, pollPulls]);
 
-  async function install(v: Variant, f: Family) {
+  async function install(t: Target) {
     setError("");
     try {
-      seenDone.current.delete(v.tag);
-      const engine = f.engine === "ollama" ? undefined : f.engine;
-      const state = await api.pull(v.tag, engine);
-      setPulls((p) => ({ ...p, [v.tag]: state }));
+      seenDone.current.delete(t.tag);
+      const state = await api.pull(t.tag, t.engine === "ollama" ? undefined : t.engine);
+      setPulls((p) => ({ ...p, [t.tag]: state }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -113,23 +118,21 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
     if (!confirm(`Delete ${tag}? You can download it again later.`)) return;
     try {
       await api.deleteModel(tag);
-      await refresh();
-      setBrowseKey((k) => k + 1);
-      onModelsChanged();
+      await changed();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  function use(v: Variant, f: Family) {
-    if (f.engine === "image") {
-      const video = f.use_cases.includes("video");
-      setPref(video ? "videoModel" : "imageModel", `image/${v.tag}`);
+  function use(t: Target) {
+    if (t.engine === "image") {
+      const video = t.use_cases.includes("video");
+      setPref(video ? "videoModel" : "imageModel", `image/${t.tag}`);
       onUseModel(video ? "video" : "image");
-    } else if (f.engine === "audio") {
-      onUseModel(v.use_cases.includes("speech") ? "speech" : "transcription");
+    } else if (t.engine === "audio") {
+      onUseModel(t.use_cases.includes("speech") ? "speech" : "transcription");
     } else {
-      setPref("model", `ollama/${v.tag}`);
+      setPref("model", `ollama/${t.tag}`);
       onUseModel("chat");
     }
   }
@@ -138,11 +141,9 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
     return <div className="page">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</div>;
   }
 
-  const variantsByTag = new Map(
-    catalog.families.flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)),
-  );
-  const actions: Actions = { install, remove, use, pulls, hfTokenSet: catalog.hf_token_set, onOpenSettings };
-  const catalogTags = new Set(variantsByTag.keys());
+  const byTag = new Map(catalog.families.flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)));
+  const actions: Actions = { install, remove, use, pulls, onOpenSettings };
+  const catalogTags = new Set(byTag.keys());
   const extraInstalled = installed.filter((m) => !catalogTags.has(m.name));
 
   return (
@@ -163,7 +164,8 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
             .filter((u) => catalog.recommendations[u.id]?.length)
             .map((u) => {
               const [top, ...alts] = catalog.recommendations[u.id];
-              const entry = variantsByTag.get(top)!;
+              const { family, variant } = byTag.get(top)!;
+              const target = { tag: variant.tag, engine: family.engine, use_cases: variant.use_cases };
               return (
                 <div key={u.id} className="card rec">
                   <div className="rec-head">
@@ -173,18 +175,15 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
                   <div className="rec-pick">
                     <div>
                       <div>
-                        {entry.family.name} <span className="muted">{entry.variant.params}</span>
+                        {family.name} <span className="muted">{variant.params}</span>
                       </div>
-                      <div className="muted small">{entry.variant.size_gb} GB download</div>
+                      <div className="muted small">{variant.size_gb} GB download</div>
                     </div>
-                    <VariantAction v={entry.variant} f={entry.family} {...actions} />
+                    <Action row={{ ...variant, ...target }} {...actions} />
                   </div>
                   {alts.length > 0 && (
                     <div className="muted small">
-                      Also good:{" "}
-                      {alts
-                        .map((t) => `${variantsByTag.get(t)!.family.name} ${variantsByTag.get(t)!.variant.params}`)
-                        .join(", ")}
+                      Also good: {alts.map((t) => `${byTag.get(t)!.family.name} ${byTag.get(t)!.variant.params}`).join(", ")}
                     </div>
                   )}
                 </div>
@@ -193,23 +192,21 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
         </div>
       </section>
 
-      <Browse key={browseKey} api={api} useCases={catalog.use_cases} actions={actions} />
+      <AllModels api={api} useCases={catalog.use_cases} actions={actions} version={tableVersion} />
 
       <section>
         <h2>Install by name</h2>
-        <CustomPull onInstall={(tag) => install({ tag } as Variant, { engine: "ollama" } as Family)} />
+        <CustomPull onInstall={(tag) => install({ tag, engine: "ollama", use_cases: ["chat"] })} />
         {extraInstalled.length > 0 && (
           <>
             <h3>Other installed models</h3>
             <div className="card">
               {extraInstalled.map((m) => (
-                <div key={m.name} className="variant-row">
+                <div key={m.name} className="installed-row">
                   <span className="mono">{m.name}</span>
-                  <span className="muted small">
-                    {[m.parameters, m.quantization, `${m.size_gb} GB`].filter(Boolean).join(" · ")}
-                  </span>
+                  <span className="muted small">{[m.parameters, m.quantization, `${m.size_gb} GB`].filter(Boolean).join(" · ")}</span>
                   <span className="row-actions">
-                    <button className="secondary" onClick={() => use({ tag: m.name, use_cases: ["chat"] } as unknown as Variant, { engine: "ollama", use_cases: ["chat"] } as unknown as Family)}>
+                    <button className="secondary" onClick={() => use({ tag: m.name, engine: "ollama", use_cases: ["chat"] })}>
                       Use
                     </button>
                     <button className="link danger" onClick={() => remove(m.name)}>
@@ -226,60 +223,74 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
   );
 }
 
-function Browse({ api, useCases, actions }: { api: Api; useCases: Catalog["use_cases"]; actions: Actions }) {
+function AllModels({
+  api,
+  useCases,
+  actions,
+  version,
+}: {
+  api: Api;
+  useCases: Catalog["use_cases"];
+  actions: Actions;
+  version: number;
+}) {
+  const [rows, setRows] = useState<ModelRow[] | null>(null);
+  const [extra, setExtra] = useState<ModelRow[]>([]);
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<SortKey>("perfect");
   const [query, setQuery] = useState("");
-  const [debounced, setDebounced] = useState("");
   const [runnable, setRunnable] = useState(false);
-  const [result, setResult] = useState<BrowseResult | null>(null);
-  const [families, setFamilies] = useState<Family[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [shown, setShown] = useState(PAGE);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState("");
   const [error, setError] = useState("");
-  const PAGE = 30;
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(query.trim()), 400);
-    return () => clearTimeout(t);
-  }, [query]);
+    let cancelled = false;
+    loadModelTable(api)
+      .then((t) => !cancelled && setRows(t.models))
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [api, version]);
 
-  const load = useCallback(
-    async (offset: number) => {
-      setLoading(true);
-      setError("");
-      try {
-        const r = await api.browse({ category, sort, q: debounced, runnable, offset, limit: PAGE });
-        setResult(r);
-        setFamilies((prev) => (offset === 0 ? r.families : [...prev, ...r.families]));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [api, category, sort, debounced, runnable],
-  );
+  useEffect(() => setShown(PAGE), [category, sort, query, runnable]);
 
-  useEffect(() => {
-    void load(0);
-  }, [load]);
+  const all = useMemo(() => {
+    if (!rows) return [];
+    const tags = new Set(rows.map((r) => r.tag));
+    return [...rows, ...extra.filter((r) => !tags.has(r.tag))];
+  }, [rows, extra]);
+  const filtered = useMemo(() => filterModels(all, { category, query, sort, runnable }), [all, category, query, sort, runnable]);
+
+  async function searchHub() {
+    const q = query.trim();
+    setSearching(true);
+    setError("");
+    try {
+      const r = await api.searchModels(q);
+      setExtra((prev) => {
+        const seen = new Set(prev.map((m) => m.tag));
+        return [...prev, ...r.models.filter((m) => !seen.has(m.tag))];
+      });
+      setSearched(q);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSearching(false);
+    }
+  }
 
   const sortHint = SORTS.find((s) => s.id === sort)?.hint;
+  const q = query.trim();
 
   return (
     <section>
-      <h2>Browse all models</h2>
-      <p className="muted small">
-        The whole Ollama library plus image, video and speech models from Hugging Face, rated for your hardware.
-      </p>
+      <h2>All models</h2>
+      <p className="muted small">The whole Ollama library plus image, video and speech models from Hugging Face, rated for your hardware.</p>
       <div className="browse-controls">
-        <input
-          className="browse-search"
-          type="search"
-          placeholder="Search models… (also searches Hugging Face GGUF models)"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <input className="browse-search" type="search" placeholder="Search models…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
           {SORTS.map((s) => (
             <option key={s.id} value={s.id}>
@@ -304,23 +315,145 @@ function Browse({ api, useCases, actions }: { api: Api; useCases: Catalog["use_c
         ))}
       </div>
       {error && <p className="error">{error}</p>}
-      {result && (
-        <p className="muted small">
-          {result.total.toLocaleString()} model families{debounced ? ` matching "${debounced}"` : ""}
-        </p>
-      )}
-      <div className="family-list">
-        {families.map((f) => (
-          <FamilyCard key={f.id} family={f} useCases={useCases} {...actions} />
-        ))}
-      </div>
-      {loading && <p className="muted">Loading…</p>}
-      {result && families.length < result.total && !loading && (
-        <button className="secondary load-more" onClick={() => void load(families.length)}>
-          Show more ({result.total - families.length} more)
-        </button>
+      {!rows ? (
+        <p className="muted">Loading models…</p>
+      ) : (
+        <>
+          <p className="muted small">{filtered.length.toLocaleString()} models</p>
+          <div className="model-table" role="table">
+            <div className="model-row head" role="row">
+              <span>Model</span>
+              <span>Size</span>
+              <span>Fit</span>
+              <span>Downloads</span>
+              <span />
+            </div>
+            {filtered.slice(0, shown).map((r) => (
+              <Row key={r.tag} row={r} useCases={useCases} {...actions} />
+            ))}
+          </div>
+          {filtered.length > shown && (
+            <button className="secondary load-more" onClick={() => setShown((n) => n + PAGE)}>
+              Show more ({(filtered.length - shown).toLocaleString()} more)
+            </button>
+          )}
+          {q.length >= 2 && searched !== q && (
+            <div className="hub-search">
+              <span className="muted small">Not finding it?</span>
+              <button className="secondary" disabled={searching} onClick={searchHub}>
+                {searching ? "Searching…" : `Search Hugging Face for "${q}"`}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </section>
+  );
+}
+
+function Row({ row: r, useCases, ...actions }: { row: ModelRow; useCases: Catalog["use_cases"] } & Actions) {
+  const names = Object.fromEntries(useCases.map((u) => [u.id, u.id === "chat" ? "General" : u.name]));
+  const source = r.source ?? "curated";
+  const dl = downloads(r);
+  return (
+    <div className="model-row" role="row">
+      <div className="model-cell-main">
+        <div className="model-name">
+          <strong>{r.name}</strong>
+          {r.params && <span className="model-params">{r.params}</span>}
+          <span className={`tag source-${source}`}>{SOURCE_LABEL[source]}</span>
+          {r.tools && (
+            <span className="tag tools" title="Can use web search and agent mode">
+              Tools
+            </span>
+          )}
+          {r.url && (
+            <a className="small" href={r.url} target="_blank" rel="noreferrer" title="Open model page">
+              ↗
+            </a>
+          )}
+        </div>
+        <div className="model-meta muted small" title={r.description}>
+          {r.use_cases.map((u) => names[u] ?? u).join(" · ")}
+          {r.publisher ? ` · ${r.publisher}` : ""}
+          {r.license ? ` · ${r.license}` : ""}
+          {r.description ? ` · ${r.description}` : ""}
+        </div>
+        {(r.unsupported || r.engine_note) && <div className="engine-note small">{r.unsupported || r.engine_note}</div>}
+      </div>
+      <span className="muted small cell-size" title={r.size_estimated ? "Estimated; exact size is known at install" : undefined}>
+        {r.size_gb != null ? `${r.size_estimated ? "~" : ""}${r.size_gb} GB` : "?"}
+      </span>
+      <span className="cell-fit">
+        <span className={`fit fit-${r.fit}`} title={r.needed_gb ? `Needs about ${r.needed_gb} GB of memory` : undefined}>
+          {FIT_LABEL[r.fit]}
+        </span>
+      </span>
+      <span
+        className="muted small cell-downloads"
+        title={r.downloads_scope === "family" ? `${dl.toLocaleString()} across all sizes of ${r.name} (per-size counts aren't published)` : dl ? `${dl.toLocaleString()} downloads` : undefined}
+      >
+        {dl ? compact(dl) : "–"}
+        {dl > 0 && r.downloads_scope === "family" && <span className="dl-scope"> all sizes</span>}
+      </span>
+      {r.unsupported ? <span className="row-actions muted small">Not supported yet</span> : <Action row={r} {...actions} />}
+    </div>
+  );
+}
+
+type ActionRow = Target & {
+  installed: boolean;
+  requires_token?: boolean;
+  fit: Fit;
+  disk_ok: boolean;
+};
+
+function Action({ row: r, install, remove, use, pulls, onOpenSettings }: { row: ActionRow } & Actions) {
+  const pull = pulls[r.tag];
+  if (pull && !pull.done) {
+    return (
+      <span className="row-actions">
+        <Progress value={pull.total ? pull.completed / pull.total : 0} small />
+      </span>
+    );
+  }
+  if (r.installed) {
+    return (
+      <span className="row-actions">
+        {!r.use_cases.includes("embedding") && (
+          <button className="secondary" onClick={() => use(r)}>
+            Use
+          </button>
+        )}
+        <button className="link danger" onClick={() => remove(r.tag)}>
+          Delete
+        </button>
+      </span>
+    );
+  }
+  if (r.requires_token) {
+    return (
+      <span className="row-actions">
+        <button className="secondary token-needed" onClick={onOpenSettings} title="This model is gated. Add a Hugging Face token in Settings.">
+          Requires Hugging Face token
+        </button>
+      </span>
+    );
+  }
+  const risky = r.fit === "too_large" || !r.disk_ok;
+  return (
+    <span className="row-actions">
+      <button
+        className={risky ? "secondary" : "primary"}
+        title={!r.disk_ok ? "Not enough free disk space" : undefined}
+        onClick={() => {
+          if (risky && !confirm(`${r.tag} probably won't run well on this machine${r.disk_ok ? "" : " and may not fit on disk"}. Download anyway?`)) return;
+          install(r);
+        }}
+      >
+        Install
+      </button>
+    </span>
   );
 }
 
@@ -345,8 +478,8 @@ function HardwareCard({ hw }: { hw: Hardware }) {
       </div>
       {!hw.gpus.length && (
         <p className="muted small full">
-          Models will run on the CPU, which is much slower. Have an NVIDIA GPU? Make sure the container runs with GPU
-          access (Unraid: <code>--runtime=nvidia</code>; Docker: <code>--gpus all</code>).
+          Models will run on the CPU, which is much slower. Have an NVIDIA GPU? Make sure the container runs with GPU access
+          (Unraid: <code>--runtime=nvidia</code>; Docker: <code>--gpus all</code>).
         </p>
       )}
     </div>
@@ -374,114 +507,6 @@ function ActivePulls({ pulls }: { pulls: PullState[] }) {
   );
 }
 
-function FamilyCard({ family, useCases, ...actions }: { family: Family; useCases: Catalog["use_cases"] } & Actions) {
-  const names = Object.fromEntries(useCases.map((u) => [u.id, u.id === "chat" ? "General" : u.name]));
-  const source = family.source ?? "curated";
-  return (
-    <div className="card family">
-      <div className="family-head">
-        <div className="family-title">
-          <strong>{family.name}</strong>
-          <span className="muted small"> by {family.publisher}</span>
-          <span className={`tag source-${source}`}>{SOURCE_LABEL[source]}</span>
-          {family.url && (
-            <a className="small" href={family.url} target="_blank" rel="noreferrer" title="Open model page">
-              ↗
-            </a>
-          )}
-        </div>
-        <div className="tags">
-          {family.use_cases.map((u) => (
-            <span key={u} className="tag">
-              {names[u] ?? u}
-            </span>
-          ))}
-          {family.tools && (
-            <span className="tag tools" title="Can use web search and agent mode">
-              Tools
-            </span>
-          )}
-        </div>
-      </div>
-      <p className="muted small">
-        {family.description}
-        {family.license && <span className="license">License: {family.license}</span>}
-        {!!family.popularity && <span className="license">{compact(family.popularity)} downloads</span>}
-      </p>
-      {family.engine_note && <p className="engine-note small">{family.engine_note}</p>}
-      {family.unsupported && <p className="engine-note small">{family.unsupported}</p>}
-      {family.variants.map((v) => (
-        <div key={v.tag} className={`variant-row ${v.best ? "best" : ""}`}>
-          <span>
-            {v.params || family.name}
-            {v.best && <span className="tag best-tag" title="The biggest model that runs well on your hardware">Perfect match</span>}
-          </span>
-          <span className="muted small" title={v.size_estimated ? "Estimated; exact size is known at install" : undefined}>
-            {v.size_gb != null ? `${v.size_estimated ? "~" : ""}${v.size_gb} GB` : "?"}
-          </span>
-          <span className={`fit fit-${v.fit}`} title={v.needed_gb ? `Needs about ${v.needed_gb} GB of memory` : undefined}>
-            {FIT_LABEL[v.fit]}
-          </span>
-          {family.unsupported ? <span className="row-actions muted small">Not supported yet</span> : <VariantAction v={v} f={family} {...actions} />}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function VariantAction({ v, f, install, remove, use, pulls, onOpenSettings }: { v: Variant; f: Family } & Actions) {
-  const pull = pulls[v.tag];
-  if (pull && !pull.done) {
-    return (
-      <span className="row-actions">
-        <Progress value={pull.total ? pull.completed / pull.total : 0} small />
-      </span>
-    );
-  }
-  if (v.installed) {
-    return (
-      <span className="row-actions">
-        {!v.use_cases.includes("embedding") && (
-          <button className="secondary" onClick={() => use(v, f)}>
-            Use
-          </button>
-        )}
-        <button className="link danger" onClick={() => remove(v.tag)}>
-          Delete
-        </button>
-      </span>
-    );
-  }
-  if (v.requires_token) {
-    return (
-      <span className="row-actions">
-        <button className="secondary token-needed" onClick={onOpenSettings} title="This model is gated. Add a Hugging Face token in Settings.">
-          Requires Hugging Face token
-        </button>
-      </span>
-    );
-  }
-  const risky = v.fit === "too_large" || !v.disk_ok;
-  return (
-    <span className="row-actions">
-      <button
-        className={risky ? "secondary" : "primary"}
-        title={!v.disk_ok ? "Not enough free disk space" : undefined}
-        onClick={() => {
-          if (
-            risky &&
-            !confirm(`${v.tag} probably won't run well on this machine${v.disk_ok ? "" : " and may not fit on disk"}. Download anyway?`)
-          )
-            return;
-          install(v, f);
-        }}
-      >
-        Install
-      </button>
-    </span>
-  );
-}
-
 function CustomPull({ onInstall }: { onInstall: (tag: string) => void }) {
   const [value, setValue] = useState("");
   return (
@@ -495,11 +520,7 @@ function CustomPull({ onInstall }: { onInstall: (tag: string) => void }) {
         }
       }}
     >
-      <input
-        value={value}
-        placeholder="e.g. llama3.2:3b or hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M"
-        onChange={(e) => setValue(e.target.value)}
-      />
+      <input value={value} placeholder="e.g. llama3.2:3b or hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M" onChange={(e) => setValue(e.target.value)} />
       <button type="submit" className="primary" disabled={!value.trim()}>
         Install
       </button>

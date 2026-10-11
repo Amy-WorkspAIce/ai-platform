@@ -40,39 +40,51 @@ def test_perfect_match_prefers_the_biggest_model_that_fits():
     assert best == ["qwen:5.2"]  # 9.3 GB needs ~12 GB with overhead -> partial
 
 
-def test_perfect_sort_ranks_capable_fitting_models_first():
-    families = annotated(
+def tags(result):
+    return [m["tag"] for m in result["models"]]
+
+
+def test_perfect_sort_is_one_flat_list_biggest_fitting_first():
+    # The Gemma case: 1B and 4B fit, so 4B must come first - across all families.
+    models = annotated(
+        fam("gemma3", [0.8, 3.3, 8.1, 17.4]),
         fam("tiny", [0.4], popularity=10**9),
-        fam("mid", [5.0]),
         fam("huge", [40]),
-        fam("tight", [7.9]),
     )
-    order = [f["name"] for f in catalog.browse(families, sort="perfect")["families"]]
-    assert order == ["tight", "mid", "tiny", "huge"]
-    fit_order = [f["name"] for f in catalog.browse(families, sort="fit")["families"]]
-    assert fit_order[0] == "tiny"  # most headroom
-    assert [f["name"] for f in catalog.browse(families, sort="name")["families"]] == [
-        "huge",
-        "mid",
-        "tight",
-        "tiny",
-    ]
-    assert catalog.browse(families, sort="size_desc")["families"][0]["name"] == "huge"
-    assert catalog.browse(families, sort="popular")["families"][0]["name"] == "tiny"
+    order = tags(catalog.browse(models, sort="perfect"))
+    assert order[:4] == ["gemma3:8.1", "gemma3:3.3", "gemma3:0.8", "tiny:0.4"]
+    assert order.index("gemma3:17.4") > order.index("tiny:0.4")  # partial after GPU fits
+    assert order[-1] == "huge:40"
+
+
+def test_other_sorts():
+    models = annotated(fam("tiny", [0.4], popularity=10**9), fam("mid", [5.0]), fam("huge", [40]))
+    assert tags(catalog.browse(models, sort="fit"))[0] == "tiny:0.4"  # most headroom
+    assert tags(catalog.browse(models, sort="name")) == ["huge:40", "mid:5.0", "tiny:0.4"]
+    assert tags(catalog.browse(models, sort="size_desc"))[0] == "huge:40"
+    assert tags(catalog.browse(models, sort="size_asc"))[0] == "tiny:0.4"
+    assert tags(catalog.browse(models, sort="popular"))[0] == "tiny:0.4"
 
 
 def test_browse_filters():
-    families = annotated(
+    models = annotated(
         fam("coder", [4], use_cases=("chat", "code"), description="for code"),
         fam("embed", [0.3], use_cases=("embedding",)),
         fam("giant", [200]),
     )
-    assert [f["name"] for f in catalog.browse(families, category="code")["families"]] == ["coder"]
-    assert catalog.browse(families, query="EMBED")["total"] == 1
-    assert "giant" not in [
-        f["name"] for f in catalog.browse(families, runnable_only=True)["families"]
-    ]
-    assert catalog.browse(families, limit=1, offset=1)["total"] == 3
+    assert tags(catalog.browse(models, category="code")) == ["coder:4"]
+    assert catalog.browse(models, query="EMBED")["total"] == 1
+    assert "giant:200" not in tags(catalog.browse(models, runnable_only=True))
+    assert catalog.browse(models, limit=1, offset=1)["total"] == 3
+
+
+def test_rows_carry_family_info_and_unsupported_families():
+    cloud = fam("cloudy", [])
+    cloud["unsupported"] = "cloud only"
+    rows = catalog.flatten(annotated(fam("q", [1.0], description="d"), cloud))
+    assert rows[0]["name"] == "q" and rows[0]["description"] == "d" and rows[0]["fit"] == "gpu"
+    assert rows[1]["tag"] == "cloudy" and rows[1]["unsupported"]
+    assert tags(catalog.browse(annotated(fam("q", [1.0]), cloud)))[-1] == "cloudy"
 
 
 def test_gated_models_are_never_the_pick_without_a_token():
@@ -80,6 +92,27 @@ def test_gated_models_are_never_the_pick_without_a_token():
     f["variants"][0]["requires_token"] = True
     [a] = annotated(f)
     assert not a["variants"][0]["best"]
+
+
+def test_download_counts_per_model_or_family():
+    live_ollama = fam("qwen3", [5.2], popularity=40_000_000, source="ollama")
+    live_ollama["variants"][0].update(
+        tag="qwen3:14b", downloads=40_000_000, downloads_scope="family"
+    )
+    live_hf = fam("sdxl", [7.0], source="huggingface")
+    live_hf["variants"][0].update(tag="org/sdxl", downloads=4_300_000, downloads_scope="model")
+    curated = [fam("Qwen 3", [5.2]), fam("SDXL", [7.0])]
+    curated[0]["variants"][0]["tag"] = "qwen3:8b"
+    curated[1]["variants"][0]["tag"] = "org/sdxl"
+    rows = {r["tag"]: r for r in catalog.flatten(catalog.merge(curated, [live_ollama, live_hf]))}
+    assert (rows["qwen3:8b"]["downloads"], rows["qwen3:8b"]["downloads_scope"]) == (
+        40_000_000,
+        "family",
+    )
+    assert (rows["org/sdxl"]["downloads"], rows["org/sdxl"]["downloads_scope"]) == (
+        4_300_000,
+        "model",
+    )
 
 
 def test_merge_drops_live_duplicates_of_curated_tags():

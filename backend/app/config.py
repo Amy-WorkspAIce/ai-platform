@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     # environment variable overrides it (and makes it read-only in the UI).
     hf_token: str | None = None
 
+    # Fetch model listings (Ollama library, Hugging Face) at startup and keep them fresh.
+    catalog_warmup: bool = True
+
     # Agent mode.
     agent_max_steps: int = 40
     agent_command_timeout: float = 600

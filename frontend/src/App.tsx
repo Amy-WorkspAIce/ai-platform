@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Api, AuthError, getApiKey, setApiKey, type Conversation, type ModelInfo } from "./api";
+import { loadModelTable } from "./modelTable";
 import { AudioView } from "./views/AudioView";
 import { ChatView } from "./views/ChatView";
 import { ImagesView } from "./views/ImagesView";
@@ -64,7 +65,9 @@ export function App() {
     if (!key) return;
     void refreshModels();
     void refreshConversations();
-  }, [key, refreshModels, refreshConversations]);
+    // Prefetch the model table so the Models page opens instantly.
+    loadModelTable(api).catch(() => undefined);
+  }, [key, api, refreshModels, refreshConversations]);
 
   if (!key) {
     return (
