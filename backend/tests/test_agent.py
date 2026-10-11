@@ -378,3 +378,63 @@ def test_search_includes_page_excerpts(monkeypatch):
     assert out.count("--- page excerpt ---") == 2  # top 3 read, one failed
     assert "PAGE https://e.com/0" in out and "PAGE https://e.com/1" not in out
     assert "[5] T4" in out and len(out) < 9000
+
+
+def test_search_falls_back_down_the_chain():
+    from app.tools import web
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.host)
+        if request.url.host == "searx.local":
+            # SearXNG up, but every engine failed.
+            return httpx.Response(
+                200, json={"results": [], "unresponsive_engines": [["google", "CAPTCHA"]]}
+            )
+        html = '<a class="result__a" href="https://example.com/x">X</a>'
+        return httpx.Response(200, text=html)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    settings = Settings(searxng_url="http://searx.local:8888")
+    results = asyncio.run(web.search("q", settings, client))
+    assert [r.url for r in results] == ["https://example.com/x"]
+    assert calls == ["searx.local", "html.duckduckgo.com"]
+
+
+def test_search_unavailable_message_is_actionable_for_the_model():
+    from app.tools import web
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(503)))
+    with pytest.raises(WebError) as exc:
+        asyncio.run(web.search("q", Settings(searxng_url="http://s:1"), client))
+    msg = str(exc.value)
+    assert "Don't retry" in msg and "fetch_url" in msg and "searxng" in msg and "duckduckgo" in msg
+
+
+def test_provider_chain():
+    from app.tools.web import provider_chain
+
+    assert provider_chain(Settings()) == ["duckduckgo"]
+    assert provider_chain(Settings(bundled_searxng=True, searxng_url="")) == [
+        "searxng",
+        "duckduckgo",
+    ]
+    assert provider_chain(Settings(searxng_url="http://s", brave_api_key="b")) == [
+        "searxng",
+        "brave",
+        "duckduckgo",
+    ]
+    assert provider_chain(Settings(search_provider="brave", brave_api_key="b")) == [
+        "brave",
+        "duckduckgo",
+    ]
+
+
+def test_system_prompt_explains_date_and_web_access():
+    from app.api.agent import AgentChatRequest, system_prompt
+
+    no_web = system_prompt(AgentChatRequest(model="m", message="x"))
+    assert "not a trick" in no_web and "do NOT have web access" in no_web and '"Web"' in no_web
+    with_web = system_prompt(AgentChatRequest(model="m", message="x", web=True))
+    assert "You have web access" in with_web and "do NOT" not in with_web

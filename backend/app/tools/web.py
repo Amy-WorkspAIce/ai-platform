@@ -43,50 +43,82 @@ class SearchResult:
     snippet: str
 
 
-def provider_name(settings: Settings) -> str:
-    choice = settings.search_provider
-    if choice != "auto":
-        return choice
+BUNDLED_SEARXNG_URL = "http://127.0.0.1:8888"
+
+
+def searxng_endpoint(settings: Settings) -> str | None:
     if settings.searxng_url:
-        return "searxng"
-    if settings.brave_api_key:
-        return "brave"
-    return "duckduckgo"
+        return settings.searxng_url
+    return BUNDLED_SEARXNG_URL if settings.bundled_searxng else None
+
+
+def provider_chain(settings: Settings) -> list[str]:
+    """Providers to try, in order. DuckDuckGo is always the last resort."""
+    if settings.search_provider != "auto":
+        chain = [settings.search_provider]
+    else:
+        chain = []
+        if searxng_endpoint(settings):
+            chain.append("searxng")
+        if settings.brave_api_key:
+            chain.append("brave")
+    if "duckduckgo" not in chain:
+        chain.append("duckduckgo")
+    return chain
+
+
+SEARCH_UNAVAILABLE = (
+    "Web search is unavailable right now ({details}). Don't retry the search. You can still "
+    "read a specific page with fetch_url if you know a reliable URL for it (for example an "
+    "official site), or tell the user that web search isn't working at the moment."
+)
 
 
 async def search(
     query: str, settings: Settings, client: httpx.AsyncClient, limit: int = 8
 ) -> list[SearchResult]:
-    provider = provider_name(settings)
-    try:
-        if provider == "searxng":
-            results = await _searxng(query, settings, client)
-        elif provider == "brave":
-            results = await _brave(query, settings, client)
-        else:
-            results = await _duckduckgo(query, client)
-    except httpx.HTTPError as exc:
-        raise WebError(f"Search ({provider}) failed: {exc}") from exc
-    return results[:limit]
+    """Search with the first provider that works, falling back down the chain."""
+    errors = []
+    for provider in provider_chain(settings):
+        try:
+            if provider == "searxng":
+                results = await _searxng(query, settings, client)
+            elif provider == "brave":
+                results = await _brave(query, settings, client)
+            else:
+                results = await _duckduckgo(query, client)
+        except (WebError, httpx.HTTPError) as exc:
+            log.warning("Search via %s failed: %s", provider, exc)
+            errors.append(f"{provider}: {exc}")
+            continue
+        return results[:limit]
+    raise WebError(SEARCH_UNAVAILABLE.format(details="; ".join(errors)))
 
 
 async def _searxng(query: str, settings: Settings, client: httpx.AsyncClient) -> list[SearchResult]:
-    if not settings.searxng_url:
-        raise WebError("AMY_SEARXNG_URL is not set")
+    endpoint = searxng_endpoint(settings)
+    if not endpoint:
+        raise WebError("SearXNG is not configured")
     resp = await client.get(
-        settings.searxng_url.rstrip("/") + "/search",
+        endpoint.rstrip("/") + "/search",
         params={"q": query, "format": "json"},
         headers={"User-Agent": USER_AGENT},
         timeout=20,
     )
     if resp.status_code == 403:
-        raise WebError("SearXNG refused JSON output; enable 'json' under search.formats")
+        raise WebError("SearXNG refused JSON output (enable 'json' under search.formats)")
     resp.raise_for_status()
-    return [
+    body = resp.json()
+    results = [
         SearchResult(r.get("title", ""), r["url"], r.get("content", ""))
-        for r in resp.json().get("results", [])
+        for r in body.get("results", [])
         if r.get("url")
     ]
+    if not results and body.get("unresponsive_engines"):
+        # Every engine failed (blocked, CAPTCHA, timeout): let the next provider try.
+        names = ", ".join(e[0] for e in body["unresponsive_engines"][:5])
+        raise WebError(f"all SearXNG engines failed ({names})")
+    return results
 
 
 async def _brave(query: str, settings: Settings, client: httpx.AsyncClient) -> list[SearchResult]:
@@ -115,7 +147,7 @@ async def _duckduckgo(query: str, client: httpx.AsyncClient) -> list[SearchResul
     resp.raise_for_status()
     results = parse_duckduckgo(resp.text)
     if not results and "anomaly" in resp.text.lower():
-        raise WebError("DuckDuckGo is rate-limiting this server; configure SearXNG or Brave")
+        raise WebError("DuckDuckGo is rate-limiting this server")
     return results
 
 

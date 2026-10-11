@@ -34,6 +34,7 @@ The platform **does not implement inference**. It brokers requests to engines.
 │                                │                                   │
 │                                ▼ httpx                             │
 │  ollama serve (127.0.0.1:11434, only when AMY_BUNDLED_OLLAMA=true) │
+│  SearXNG/granian (127.0.0.1:8888, AMY_BUNDLED_SEARXNG=true)        │
 │                                                                    │
 │ /data  ── secrets/, amy.db, ollama/models, images/, cache/cuda,    │
 │           engines/<engine>/venv, models/<engine>/<model>           │

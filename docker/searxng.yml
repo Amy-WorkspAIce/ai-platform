@@ -1,0 +1,30 @@
+# SearXNG bundled inside the Amy container: a private meta-search engine that only Amy
+# talks to (127.0.0.1). It queries several engines at once, so one engine throttling the
+# server doesn't break web search.
+use_default_settings:
+  engines:
+    remove:          # Tor-only engines; they can't work here
+      - ahmia
+      - torch
+
+general:
+  instance_name: "Amy search"
+  enable_metrics: false
+
+server:
+  bind_address: "127.0.0.1"
+  port: 8888
+  limiter: false          # Amy is the only client
+  image_proxy: false
+  public_instance: false
+  # secret_key comes from the SEARXNG_SECRET environment variable (generated per install).
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0

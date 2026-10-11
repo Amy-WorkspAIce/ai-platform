@@ -26,16 +26,29 @@ router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
 
 WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
-WEB_PROMPT = (
-    "You can search the web with web_search and read pages with fetch_url. Use them for "
-    "current events, prices, documentation, or anything you're unsure about, instead of "
-    "guessing. Search results are only short snippets and are often outdated: for specific "
-    "facts (versions, dates, numbers, quotes), open the most relevant results with fetch_url, "
-    "preferring official sources, and answer from the page content. If sources disagree, say "
-    "so. Cite the pages you used as markdown links."
-)
+# Every chat gets this. Without it, models treat the date as a puzzle ("my training ends in
+# 2024, is the user testing me?") and spend their thinking arguing about it.
+BASE_PROMPT = """You are Amy, an AI assistant running on the user's own server.
 
-AGENT_PROMPT = """You are Amy, an autonomous coding agent working in the workspace "{name}" \
+The current date is {today}. Your training data ends before this date; that's expected and \
+not a trick. Trust this date, and for anything that may have changed since your training \
+(news, prices, software versions, weather, schedules), rely on your tools when you have them.
+
+Answer simple questions directly. Use markdown when it helps readability."""
+
+WEB_PROMPT = """You have web access in this chat:
+- web_search searches the web and includes excerpts from the top pages.
+- fetch_url reads one page in full.
+Use them for live or recent information instead of guessing, then answer from what you found \
+and cite the pages as markdown links. Prefer official sources; if sources disagree, say so.
+If a tool fails, don't keep retrying it. Try one other approach (e.g. fetch_url on a site you \
+know) or tell the user what didn't work."""
+
+NO_WEB_PROMPT = """You do NOT have web access in this chat. If the user needs live or recent \
+information, say so briefly and mention they can turn on "Web" in the toolbar above the \
+message box, then help with what you do know."""
+
+AGENT_PROMPT = """You are working as an autonomous coding agent in the workspace "{name}" \
 on the user's server.
 
 The workspace root is the current directory ("."). All paths are relative to it. Do NOT prefix \
@@ -100,14 +113,13 @@ def get_workspace(request: Request, name: str) -> Workspace:
 
 
 def system_prompt(req: AgentChatRequest, ws: Workspace | None = None) -> str:
-    parts = [f"Today is {date.today():%A, %B %d, %Y}."]
+    parts = [BASE_PROMPT.format(today=f"{date.today():%A, %B %d, %Y}")]
     if req.mode == "agent" and ws is not None:
         listing = ws.list_files(".", depth=1)
         if len(listing) > 2000:
             listing = listing[:2000] + "\n..."
-        parts.insert(0, AGENT_PROMPT.format(name=req.workspace, listing=listing))
-    if req.web:
-        parts.append(WEB_PROMPT)
+        parts.append(AGENT_PROMPT.format(name=req.workspace, listing=listing))
+    parts.append(WEB_PROMPT if req.web else NO_WEB_PROMPT)
     return "\n\n".join(parts)
 
 

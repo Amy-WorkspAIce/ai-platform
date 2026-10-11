@@ -24,8 +24,8 @@ call, and it can act on those apps through their APIs.
   GGUF model can be installed by name.
 - **ChatGPT-style chat** with saved conversations, streaming, markdown, collapsible
   "thinking" for reasoning models, dictation and read-aloud.
-- **Web access**: the model can search (SearXNG, Brave, or DuckDuckGo with zero setup)
-  and read pages, citing its sources.
+- **Web access**: the model can search the web through a built-in, private SearXNG
+  (no setup; Brave or your own SearXNG optional) and read pages, citing its sources.
 - **Agent mode**: describe a feature and Amy works on it in a workspace (an empty folder
   or a cloned git repo). It reads code, edits files and runs tests and builds, asking your
   approval before each change or command.

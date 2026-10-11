@@ -12,6 +12,8 @@
 # so `pip install` in a workspace can't break it.
 
 ARG OLLAMA_VERSION=latest
+# SearXNG (bundled meta-search for web access), pinned to a tested commit.
+ARG SEARXNG_COMMIT=f4822b3fc46726bb259d14c6332b702c76b98f82
 
 # ---- frontend build ----
 FROM node:22-alpine AS frontend
@@ -49,8 +51,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8484/health')"
 ENTRYPOINT ["/entrypoint.sh"]
 
-# ---- full: platform + bundled Ollama (CUDA) ----
+# ---- full: platform + bundled Ollama (CUDA) + bundled SearXNG ----
 FROM ollama/ollama:${OLLAMA_VERSION} AS full
+ARG SEARXNG_COMMIT
 # Ollama: 16k context for agent work; flash attention + q8_0 KV cache halve its memory cost.
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     AMY_DATA_DIR=/data AMY_STATIC_DIR=/app/static AMY_BUNDLED_OLLAMA=true \
@@ -58,11 +61,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     OLLAMA_CONTEXT_LENGTH=16384 OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
     NVIDIA_VISIBLE_DEVICES=all NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     CUDA_CACHE_PATH=/data/cache/cuda CUDA_CACHE_MAXSIZE=4294967296 \
+    AMY_BUNDLED_SEARXNG=true \
+    SEARXNG_SETTINGS_PATH=/etc/amy/searxng.yml \
     PATH=/opt/venv/bin:$PATH
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv git ripgrep curl ca-certificates procps \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv /opt/venv
+# SearXNG in its own venv, so its pinned dependencies stay separate from the platform's.
+# (Its installer imports searx, which reads SEARXNG_SETTINGS_PATH, so copy settings first.)
+COPY docker/searxng.yml /etc/amy/searxng.yml
+RUN git clone --filter=blob:none https://github.com/searxng/searxng.git /tmp/searxng \
+ && git -C /tmp/searxng checkout "$SEARXNG_COMMIT" \
+ && python3 -m venv /opt/searxng \
+ && /opt/searxng/bin/pip install --no-cache-dir -U pip setuptools wheel \
+ && /opt/searxng/bin/pip install --no-cache-dir \
+      -r /tmp/searxng/requirements.txt -r /tmp/searxng/requirements-server.txt \
+ && /opt/searxng/bin/pip install --no-cache-dir --no-build-isolation /tmp/searxng \
+ && rm -rf /tmp/searxng
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \

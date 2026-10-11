@@ -13,7 +13,8 @@ All settings are environment variables. None are required.
 | `AMY_ENGINE_IDLE_MINUTES` | `10` | Stop idle image/audio engine workers after this long, returning their RAM and VRAM to language models. |
 | `AMY_TORCH_INDEX_URL` | `https://download.pytorch.org/whl/cu128` | PyTorch wheel index for the image engine on NVIDIA GPUs. cu128 needs driver 570+; use `.../whl/cu126` for older drivers. Machines without an NVIDIA GPU use the CPU wheels. |
 | `AMY_SEARCH_PROVIDER` | `auto` | Web search: `auto`, `searxng`, `brave` or `duckduckgo`. `auto` uses the first one configured, falling back to DuckDuckGo. |
-| `AMY_SEARXNG_URL` | *(none)* | Your SearXNG instance, e.g. `http://192.168.1.10:8080`. JSON output must be enabled in its settings. |
+| `AMY_BUNDLED_SEARXNG` | `true` (full image) | Run SearXNG inside the container for web search. |
+| `AMY_SEARXNG_URL` | *(bundled)* | Use your own SearXNG instead, e.g. `http://192.168.1.10:8080` (JSON output must be enabled). Blank means the bundled one. |
 | `AMY_BRAVE_API_KEY` | *(none)* | Brave Search API key. |
 | `AMY_WEB_ALLOW_PRIVATE` | `false` | Let `fetch_url` reach private/LAN addresses. |
 | `AMY_GITHUB_TOKEN` | *(none)* | Token for agent git operations on github.com (clone private repos, push). Use a fine-grained token. |

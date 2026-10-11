@@ -17,13 +17,21 @@ Turn on **🌐 Web** in the chat toolbar. The model gets two tools:
 
 ### Search providers
 
+The **full image bundles SearXNG**, a private meta-search engine that runs inside the
+container on `127.0.0.1:8888`. Nothing to set up. It queries several engines at once
+(Google, Bing, DuckDuckGo, Brave, Wikipedia, ...) and keeps working when one of them
+throttles your server, which a single-engine scraper can't do.
+
 | Provider | Setup | Notes |
 |---|---|---|
-| **SearXNG** (recommended) | Run SearXNG (Unraid: Community Apps → "SearXNG"; Docker: `deploy/docker/docker-compose.searxng.yml`) and set `AMY_SEARXNG_URL`. In SearXNG's `settings.yml`, add `json` under `search.formats`. | Self-hosted, private, aggregates many engines. |
+| **Bundled SearXNG** (default, full image) | None. Disable with `AMY_BUNDLED_SEARXNG=false`. | Private; secret generated per install in `/data/secrets`. |
+| **Your own SearXNG** | Set `AMY_SEARXNG_URL` (with `json` enabled under `search.formats`). | For the slim image, or if you already run one (`deploy/docker/docker-compose.searxng.yml`). |
 | **Brave Search API** | Set `AMY_BRAVE_API_KEY` (free tier available). | Reliable; queries go to Brave. |
-| **DuckDuckGo** | Nothing; the default fallback. | Scrapes DuckDuckGo's HTML page. Fine for personal use, but it can be rate-limited. |
+| **DuckDuckGo** | Nothing. | Last-resort fallback. Scrapes one engine, so it gets rate-limited quickly. |
 
-`AMY_SEARCH_PROVIDER=auto` (default) picks SearXNG if configured, then Brave, then DuckDuckGo.
+Providers are tried in that order and fall through on failure (including "all SearXNG
+engines blocked"). If every provider fails, the model is told plainly that search is down,
+and not to keep retrying, so it can use `fetch_url` on a known site or tell you.
 
 ### Safety
 

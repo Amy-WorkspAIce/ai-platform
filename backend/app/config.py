@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Web access for tool-using chats. search_provider: auto | searxng | brave | duckduckgo.
     search_provider: str = "auto"
     searxng_url: str | None = None
+    # Set in the full image, which runs SearXNG inside the container. A blank searxng_url
+    # (e.g. an empty Unraid template field) then means "use the bundled one".
+    bundled_searxng: bool = False
     brave_api_key: str | None = None
     # Allow fetch_url to reach private/LAN addresses (off: protects your network from
     # pages that try to steer the model into probing it).

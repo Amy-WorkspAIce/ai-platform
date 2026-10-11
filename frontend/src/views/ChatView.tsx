@@ -6,7 +6,6 @@ import {
   getPref,
   setPref,
   type AgentEvent,
-  type ChatMessage,
   type ModelInfo,
   type StoredMessage,
   type WorkspaceInfo,
@@ -254,63 +253,18 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
     if (convId.current) onSaved(convId.current);
   }
 
-  async function sendPlain(text: string, history: ChatMessage[]) {
-    if (!convId.current) {
-      const conv = await api.createConversation(titleFrom(text), model);
-      convId.current = conv.id;
-      onSaved(conv.id);
-    }
-    const id = convId.current;
-    void api.addMessage(id, { role: "user", content: text }).catch(() => {});
-    let content = "";
-    let reasoning = "";
-    try {
-      await api.streamChat(
-        model,
-        history,
-        (d) => {
-          if (d.content) {
-            content += d.content;
-            appendText("content", d.content);
-          }
-          if (d.reasoning) {
-            reasoning += d.reasoning;
-            appendText("reasoning", d.reasoning);
-          }
-        },
-        abort.current?.signal,
-      );
-    } finally {
-      if (content || reasoning) {
-        await api.addMessage(id, { role: "assistant", content, reasoning, model }).catch((e) =>
-          setError(`Couldn't save the chat: ${e instanceof Error ? e.message : String(e)}`),
-        );
-        onSaved(id);
-      }
-    }
-  }
-
   async function send() {
     const text = input.trim();
     if (!text || !model || busy || needsWorkspace) return;
-    const history: ChatMessage[] = [
-      ...items.flatMap((i): ChatMessage[] =>
-        i.kind === "user"
-          ? [{ role: "user", content: i.content }]
-          : i.kind === "assistant" && i.content
-            ? [{ role: "assistant", content: i.content }]
-            : [],
-      ),
-      { role: "user", content: text },
-    ];
     setItems((prev) => [...prev, { kind: "user", content: text }]);
     setInput("");
     setBusy(true);
     setError("");
     abort.current = new AbortController();
     try {
-      if (usesTools) await sendWithTools(text);
-      else await sendPlain(text, history);
+      // All chats go through the server so they get the system prompt and are saved there;
+      // tools are only offered when Web or Agent mode is on.
+      await sendWithTools(text);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
         setError(e instanceof Error ? e.message : String(e));
@@ -504,11 +458,6 @@ export function ChatView({ api, conversationId, models, sttModel, ttsModel, onSa
       )}
     </div>
   );
-}
-
-function titleFrom(text: string): string {
-  const line = text.split("\n")[0].trim();
-  return line.length > 60 ? `${line.slice(0, 57)}…` : line || "New chat";
 }
 
 /** Split out <think>…</think> blocks that some models emit inline. */
