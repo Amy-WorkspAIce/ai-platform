@@ -40,10 +40,12 @@ def test_catalog_engine_entries_are_complete():
         if fam["engine"] in ENGINES:
             for v in fam["variants"]:
                 assert "source" in v["engine_config"], v["tag"]
+                cfg = v["engine_config"]
                 if fam["engine"] == "image":
-                    assert {"steps", "guidance", "size", "full_gb", "component_gb"} <= v[
-                        "engine_config"
-                    ].keys()
+                    shape = (
+                        {"width", "height", "frames"} if cfg.get("task") == "video" else {"size"}
+                    )
+                    assert {"steps", "guidance", "full_gb", "component_gb"} | shape <= cfg.keys()
 
 
 def mark_installed(engines: EngineManager, engine: str, tag: str):
@@ -53,7 +55,7 @@ def mark_installed(engines: EngineManager, engine: str, tag: str):
     )
     d = engines.model_dir(engine, tag)
     d.mkdir(parents=True)
-    (d / ".amy-model.json").write_text("{}")
+    (d / ".amy-model.json").write_text(json.dumps(variant(tag)))
 
 
 class FakeEngines:
@@ -72,6 +74,19 @@ class FakeEngines:
             return httpx.Response(200, content=b"RIFFfake", headers={"content-type": "audio/wav"})
         if path == "/voices":
             return httpx.Response(200, json={"voices": ["af_heart"]})
+        if path == "/generate_video":
+            from pathlib import Path
+
+            Path(payload["output"]).write_bytes(b"fake mp4")
+            return httpx.Response(
+                200,
+                json={
+                    "seed": 7,
+                    "frames": payload["frames"],
+                    "fps": payload["fps"],
+                    "generate_seconds": 1.0,
+                },
+            )
         return httpx.Response(404)
 
 
@@ -161,7 +176,7 @@ def test_pull_routes_engine_models(client, monkeypatch):
     monkeypatch.setattr(
         client.app.state.engines,
         "start_install",
-        lambda engine, v: (
+        lambda engine, v, *rest: (
             started.append((engine, v["tag"])) or client.app.state.jobs.start(v["tag"], _noop)
         ),
     )
@@ -196,7 +211,7 @@ async def _install_flow(tmp_path, monkeypatch):
         engines.root.joinpath(spec.id).mkdir(parents=True, exist_ok=True)
         engines._marker(spec.id).write_text(json.dumps({"version": spec.version, "gpu": False}))
 
-    async def fake_download(engine, v, state):
+    async def fake_download(engine, v, state, hf_token=None):
         steps.append("download")
         d = engines.model_dir(engine, v["tag"])
         d.mkdir(parents=True)
@@ -221,3 +236,43 @@ def test_worker_env_adds_nvidia_libs(tmp_path):
     lib.mkdir(parents=True)
     env = engines._env("audio")
     assert str(lib) in env["LD_LIBRARY_PATH"] and env["HF_HUB_OFFLINE"] == "1"
+
+
+def test_video_job_flow(client):
+    import time
+
+    mark_installed(client.app.state.engines, "image", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers")
+    r = client.post(
+        "/v1/videos/generations",
+        headers=AUTH,
+        json={
+            "model": "image/Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            "prompt": "a fox",
+            "frames": 40,
+            "width": 830,
+        },
+    )
+    assert r.status_code == 202
+    vid = r.json()["id"]
+    for _ in range(50):
+        job = next(j for j in client.get("/api/videos/jobs", headers=AUTH).json() if j["id"] == vid)
+        if job["status"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert job["status"] == "done", job
+    sent = client.fake.calls[-1][2]
+    assert sent["frames"] == 33 and sent["width"] == 832  # 8k+1 frames, multiples of 32
+    gallery = client.get("/api/videos", headers=AUTH).json()
+    assert gallery[0]["id"] == vid and gallery[0]["params"]["seed"] == 7
+    assert client.get(f"/api/videos/{vid}", headers=AUTH).content == b"fake mp4"
+    assert client.delete(f"/api/videos/{vid}", headers=AUTH).status_code == 204
+
+
+def test_image_endpoint_rejects_video_models(client):
+    mark_installed(client.app.state.engines, "image", "Wan-AI/Wan2.1-T2V-1.3B-Diffusers")
+    r = client.post(
+        "/v1/images/generations",
+        headers=AUTH,
+        json={"model": "image/Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "prompt": "x"},
+    )
+    assert r.status_code == 400

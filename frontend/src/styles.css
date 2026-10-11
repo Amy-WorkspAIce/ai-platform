@@ -307,3 +307,40 @@ a.button.secondary { background: var(--surface-2); }
 }
 .tool-preview { border-left: 3px solid var(--warn); }
 .tool-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; padding: 0 0.75rem 0.6rem; }
+
+/* ---- browse ---- */
+.browse-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
+.browse-search { flex: 1; min-width: 220px; }
+.sort-hint { margin: 0 0 0.6rem; }
+.family-title { display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; min-width: 0; }
+.family-title a { text-decoration: none; }
+.tag.source-curated { background: var(--user-bg); color: var(--accent); }
+.tag.source-ollama { background: var(--surface-2); }
+.tag.source-huggingface { background: var(--warn-bg); color: var(--warn); }
+.variant-row.best { background: linear-gradient(90deg, var(--ok-bg), transparent 60%); border-radius: 8px; padding-left: 0.4rem; }
+.best-tag { margin-left: 0.4rem; background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.token-needed { white-space: nowrap; font-size: 0.82rem; }
+.load-more { margin: 0.75rem auto 0; display: block; }
+.variant-row { grid-template-columns: minmax(110px, 1.3fr) 80px minmax(140px, 1fr) 210px; }
+
+/* ---- settings ---- */
+.settings .setting { margin-bottom: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.setting h2 { margin: 0; font-size: 1.05rem; }
+.setting p { margin: 0; }
+.setting-head { display: flex; align-items: center; gap: 0.6rem; }
+.token-form { display: flex; gap: 0.5rem; }
+.token-form input { flex: 1; min-width: 0; }
+.hf-connected { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.providers { margin: 0; padding-left: 1.3rem; }
+
+/* ---- video ---- */
+.video-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+.video-card { padding: 0; overflow: hidden; margin: 0; }
+.video-card video, .video-placeholder { width: 100%; aspect-ratio: 16 / 9; background: #000; display: grid; place-items: center; }
+.video-card figcaption { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.video-card figcaption p { margin: 0; }
+.clip-prompt { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+@media (max-width: 560px) {
+  .variant-row { grid-template-columns: 1fr auto; }
+}

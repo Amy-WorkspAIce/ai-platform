@@ -17,11 +17,12 @@ call, and it can act on those apps through their APIs.
 ## Features
 
 - **One container, zero config.** Bundled [Ollama](https://ollama.com) with CUDA.
-- **Model discovery for your hardware.** Amy detects your GPU, memory and disk, rates
-  every model in a curated catalog ("Runs on GPU", "Partial GPU", "Too large"), and
-  recommends the best fit for each use case: chat, reasoning, code, vision, embeddings.
-  One click downloads it and pre-warms it for your GPU. Any other Ollama or Hugging Face
-  GGUF model can be installed by name.
+- **Every model, rated for your hardware.** Browse the whole Ollama library plus image,
+  video and speech models from Hugging Face (hundreds of families), organized by purpose,
+  each rated for your GPU ("Runs on GPU", "Partial GPU", "Too large"). Sort by
+  **Perfect match**: the most capable models that still run well on your machine. Curated
+  picks per use case sit on top; one click installs anything, including the engine it needs.
+  Gated models work with your Hugging Face token (Settings).
 - **ChatGPT-style chat** with saved conversations, streaming, markdown, collapsible
   "thinking" for reasoning models, dictation and read-aloud.
 - **Web access**: the model can search the web through a built-in, private SearXNG
@@ -29,8 +30,9 @@ call, and it can act on those apps through their APIs.
 - **Agent mode**: describe a feature and Amy works on it in a workspace (an empty folder
   or a cloned git repo). It reads code, edits files and runs tests and builds, asking your
   approval before each change or command.
-- **Image generation** (FLUX.2 klein, Stable Diffusion XL, Z-Image Turbo, SD 1.5) with a
-  gallery, and **audio**: transcription (Whisper) and text-to-speech (Kokoro). The engines
+- **Image and video generation**: FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5, any diffusers
+  model from Hugging Face; Wan 2.1 and LTX-Video for clips (rendered as background jobs).
+  Galleries for both. Plus **audio**: transcription (Whisper) and text-to-speech (Kokoro). The engines
   these need (PyTorch/diffusers, faster-whisper, ONNX) install themselves into `/data` the
   first time you install such a model, so the base image stays lean.
 - **OpenAI-compatible API** at `/v1`: chat, images, transcriptions and speech. Point any
@@ -102,6 +104,9 @@ print(reply.choices[0].message.content)
 - [x] Saved conversation history (sidebar chat list)
 - [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
 - [x] Web access (search + page reading) and agent mode with approvals
+- [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
+- [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)
+- [ ] Image-to-video
 - [ ] Sandbox container for agent commands
 - [ ] Provider management in the UI
 - [ ] Multiple API keys and users

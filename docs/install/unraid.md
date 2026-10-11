@@ -44,6 +44,13 @@
 into appdata: about 7 GB for images (PyTorch) and about 2 GB for audio. This happens once.
 Use the **Images** and **Audio** pages, or the mic and speaker buttons in chat.
 
+**More models:** **Models → Browse all models** lists the whole Ollama library and
+Hugging Face image/video/speech models, sorted by *Perfect match* for your GPU. Gated
+models (e.g. FLUX.1 [dev]) need a Hugging Face token: add it on the **Settings** page.
+
+**Video:** install Wan 2.1 (1.3B) from Models, then use the **Video** page. The first video
+model downloads ~29 GB (mostly its text encoder), and clips take minutes to render.
+
 **Web search:** turn on **🌐 Web** in the chat toolbar. Search runs through a SearXNG
 instance built into the container, with nothing to install. (If you already run SearXNG,
 you can point **SearXNG URL** at it instead.)

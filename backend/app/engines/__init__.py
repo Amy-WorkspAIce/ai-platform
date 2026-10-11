@@ -39,7 +39,7 @@ class EngineSpec:
     packages: tuple[str, ...]
     gpu_packages: tuple[str, ...] = ()
     needs_torch: bool = False
-    # Bump to force reinstall when packages change.
+    # Bump when packages change; installed engines are upgraded in place (no torch re-download).
     version: int = 1
 
 
@@ -57,8 +57,13 @@ ENGINES: dict[str, EngineSpec] = {
             "protobuf",
             "huggingface_hub>=0.34",
             "pillow",
+            # Video: MP4 encoding, and text cleanup used by Wan's prompt encoder.
+            "imageio>=2.34",
+            "imageio-ffmpeg>=0.5",
+            "ftfy",
         ),
         needs_torch=True,
+        version=2,
     ),
     "audio": EngineSpec(
         id="audio",
@@ -139,34 +144,79 @@ class EngineManager:
     def model_installed(self, engine: str, tag: str) -> bool:
         return (self.model_dir(engine, tag) / ".amy-model.json").exists()
 
-    def installed_tags(self, catalog_families: list[dict]) -> set[str]:
-        return {
-            v["tag"]
-            for fam in catalog_families
-            if fam["engine"] in ENGINES
-            for v in fam["variants"]
-            if self.model_installed(fam["engine"], v["tag"])
-        }
+    def installed_variant(self, engine: str, tag: str) -> dict | None:
+        """The spec saved at install time (works for any model, curated or not)."""
+        try:
+            return json.loads((self.model_dir(engine, tag) / ".amy-model.json").read_text())
+        except (OSError, ValueError):
+            return None
+
+    def installed_models(self) -> list[tuple[str, str, dict]]:
+        """(engine, tag, variant) for every installed engine model."""
+        out = []
+        for engine in ENGINES:
+            base = self.models_root / engine
+            if not base.is_dir():
+                continue
+            for meta in base.glob("**/.amy-model.json"):
+                tag = meta.parent.relative_to(base).as_posix()
+                if tag.endswith(".partial"):
+                    continue
+                try:
+                    out.append((engine, tag, json.loads(meta.read_text())))
+                except (OSError, ValueError):
+                    continue
+        return out
+
+    def installed_tags(self, catalog_families: list[dict] | None = None) -> set[str]:
+        return {tag for _, tag, _ in self.installed_models()}
 
     # ---- install ----
 
-    def start_install(self, engine: str, variant: dict) -> PullState:
-        return self.jobs.start(variant["tag"], lambda s: self._install(engine, variant, s))
+    def start_install(
+        self, engine: str, variant: dict, hf_token: str | None = None, resolve=None
+    ) -> PullState:
+        """Install a model (and its engine if needed).
 
-    async def _install(self, engine: str, variant: dict, state: PullState) -> None:
+        ``resolve`` is an optional coroutine returning the variant spec, for models whose
+        download plan has to be worked out first (any Hugging Face repo).
+        """
+
+        async def run(state: PullState) -> None:
+            spec = variant
+            if resolve is not None:
+                state.status = "Checking the model on Hugging Face"
+                spec = await resolve()
+            await self._install(engine, spec, state, hf_token)
+
+        return self.jobs.start(variant["tag"], run)
+
+    async def _install(
+        self, engine: str, variant: dict, state: PullState, hf_token: str | None = None
+    ) -> None:
         if not self.engine_installed(engine):
             await self._install_engine(ENGINES[engine], state)
-        await self._download_model(engine, variant, state)
+        await self._download_model(engine, variant, state, hf_token)
         state.status = "success"
 
+    def _installed_info(self, engine: str) -> dict:
+        try:
+            return json.loads(self._marker(engine).read_text())
+        except (OSError, ValueError):
+            return {}
+
     async def _install_engine(self, spec: EngineSpec, state: PullState) -> None:
-        state.status = f"Installing the {spec.name} (one-time)"
         base = self.root / spec.id
         await self.stop_worker(spec.id)
-        if self.venv(spec.id).exists():
-            shutil.rmtree(self.venv(spec.id))
-        base.mkdir(parents=True, exist_ok=True)
-        await self._run(state, [sys.executable, "-m", "venv", str(self.venv(spec.id))])
+        info = self._installed_info(spec.id)
+        # Same GPU/CPU flavour already installed: just add or upgrade packages in place.
+        upgrade = self.python(spec.id).exists() and info.get("gpu") == self.gpu
+        state.status = f"{'Updating' if upgrade else 'Installing'} the {spec.name} (one-time)"
+        if not upgrade:
+            if self.venv(spec.id).exists():
+                shutil.rmtree(self.venv(spec.id))
+            base.mkdir(parents=True, exist_ok=True)
+            await self._run(state, [sys.executable, "-m", "venv", str(self.venv(spec.id))])
         pip = [
             str(self.python(spec.id)),
             "-m",
@@ -176,7 +226,7 @@ class EngineManager:
             "--progress-bar",
             "off",
         ]
-        if spec.needs_torch:
+        if spec.needs_torch and not upgrade:
             index = self.torch_index_url if self.gpu else "https://download.pytorch.org/whl/cpu"
             await self._run(state, [*pip, "torch", "--index-url", index], spec.name)
         packages = list(spec.packages) + (list(spec.gpu_packages) if self.gpu else [])
@@ -200,12 +250,18 @@ class EngineManager:
             log.error("Command failed: %s\n%s", " ".join(cmd), "\n".join(tail))
             raise EngineError(tail[-1] if tail else f"{cmd[0]} failed")
 
-    async def _download_model(self, engine: str, variant: dict, state: PullState) -> None:
+    async def _download_model(
+        self, engine: str, variant: dict, state: PullState, hf_token: str | None = None
+    ) -> None:
         cfg = variant["engine_config"]
         dest = self.model_dir(engine, variant["tag"])
         partial = dest.with_name(dest.name + ".partial")  # kept on failure so retries resume
+        partial.parent.mkdir(parents=True, exist_ok=True)
         state.status = "Downloading model"
-        state.total = int(variant["size_gb"] * 1e9)
+        state.total = int((variant.get("size_gb") or 1) * 1e9)
+        env = dict(os.environ, HF_HUB_DISABLE_TELEMETRY="1")
+        if hf_token:
+            env["HF_TOKEN"] = hf_token
         proc = await asyncio.create_subprocess_exec(
             str(self.python(engine)),
             str(WORKER_DIR / ENGINES[engine].worker),
@@ -214,8 +270,11 @@ class EngineManager:
             json.dumps(cfg["source"]),
             "--dest",
             str(partial),
+            "--config",
+            json.dumps(cfg),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            env=env,
         )
         output = asyncio.create_task(proc.stdout.read()) if proc.stdout else None
         while proc.returncode is None:
@@ -226,6 +285,14 @@ class EngineManager:
         if proc.returncode != 0:
             lines = [ln for ln in text.strip().splitlines() if ln.strip()]
             log.error("Download of %s failed:\n%s", variant["tag"], text[-2000:])
+            repo = cfg["source"].get("repo")
+            if repo and any(
+                s in text for s in ("GatedRepoError", "401 Client Error", "403 Client Error")
+            ):
+                raise EngineError(
+                    f"Hugging Face denied access to {repo}. Open https://huggingface.co/{repo}, "
+                    "accept its license while logged in, and check your token in Settings."
+                )
             raise EngineError(lines[-1] if lines else "Download failed")
         shutil.rmtree(partial / ".cache", ignore_errors=True)
         if dest.exists():
@@ -307,6 +374,17 @@ class EngineManager:
                 detail = resp.text
             raise EngineError(detail)
         return resp
+
+    async def peek(self, engine: str, path: str) -> dict | None:
+        """GET from a worker if it's running (e.g. generation progress); never starts one."""
+        w = self.workers.get(engine)
+        if not w or w.proc.returncode is not None:
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=3) as client:
+                return (await client.get(f"{w.url}{path}")).json()
+        except (httpx.HTTPError, ValueError):
+            return None
 
     async def stop_worker(self, engine: str) -> None:
         w = self.workers.pop(engine, None)

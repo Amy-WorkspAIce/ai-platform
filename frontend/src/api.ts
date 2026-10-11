@@ -156,8 +156,35 @@ export class Api {
   catalog = () => this.request<Catalog>("/api/catalog");
   installed = () => this.request<InstalledModel[]>("/api/models/installed");
   pulls = () => this.request<PullState[]>("/api/models/pulls");
-  pull = (model: string) =>
-    this.request<PullState>("/api/models/pull", { method: "POST", body: JSON.stringify({ model }) });
+  pull = (model: string, engine?: string) =>
+    this.request<PullState>("/api/models/pull", {
+      method: "POST",
+      body: JSON.stringify({ model, engine }),
+    });
+  browse = (params: BrowseParams) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => v !== undefined && v !== "" && q.set(k, String(v)));
+    return this.request<BrowseResult>(`/api/catalog/browse?${q}`);
+  };
+
+  // ---- settings ----
+  settings = () => this.request<AppSettings>("/api/settings");
+  saveHfToken = (token: string) =>
+    this.request<HfStatus>("/api/settings/huggingface", {
+      method: "PUT",
+      body: JSON.stringify({ token }),
+    });
+  clearHfToken = () => this.request<HfStatus>("/api/settings/huggingface", { method: "DELETE" });
+
+  // ---- video ----
+  generateVideo = (req: VideoRequest) =>
+    this.request<{ id: string }>("/v1/videos/generations", { method: "POST", body: JSON.stringify(req) });
+  videoJobs = () => this.request<VideoJob[]>("/api/videos/jobs");
+  videos = () => this.request<GalleryVideo[]>("/api/videos");
+  deleteVideo = (id: string) => this.request<void>(`/api/videos/${id}`, { method: "DELETE" });
+  async videoUrl(id: string): Promise<string> {
+    return URL.createObjectURL(await (await this.raw(`/api/videos/${id}`)).blob());
+  }
   deleteModel = (model: string) =>
     this.request<void>(`/api/models/${model.split("/").map(encodeURIComponent).join("/")}`, {
       method: "DELETE",
@@ -211,7 +238,76 @@ export type ChatMessage = {
 
 export type Fit = "gpu" | "light" | "partial" | "cpu" | "too_large" | "unknown";
 
-export type Capability = "chat" | "image" | "transcription" | "speech";
+export type SortKey = "perfect" | "fit" | "size_asc" | "size_desc" | "name" | "popular";
+
+export type BrowseParams = {
+  category?: string;
+  q?: string;
+  sort?: SortKey;
+  runnable?: boolean;
+  offset?: number;
+  limit?: number;
+};
+
+export type BrowseResult = {
+  total: number;
+  families: Family[];
+  hardware: Hardware;
+  hf_token_set: boolean;
+};
+
+export type HfStatus = { token_set: boolean; username: string | null; source: "env" | "ui" | null };
+
+export type AppSettings = {
+  version: string;
+  huggingface: HfStatus;
+  search: { providers: string[]; bundled_searxng: boolean };
+};
+
+export type VideoRequest = {
+  model: string;
+  prompt: string;
+  negative_prompt?: string;
+  width?: number;
+  height?: number;
+  frames?: number;
+  fps?: number;
+  steps?: number;
+  seed?: number;
+};
+
+export type VideoJob = {
+  id: string;
+  model: string;
+  prompt: string;
+  status: "queued" | "running" | "done" | "error";
+  phase: string;
+  step: number;
+  steps: number;
+  error: string | null;
+  started_at: number;
+  finished_at?: number;
+  params: { width: number; height: number; frames: number; fps: number };
+};
+
+export type GalleryVideo = {
+  id: string;
+  model: string;
+  prompt: string;
+  created_at: number;
+  params: {
+    width: number;
+    height: number;
+    frames: number;
+    fps: number;
+    seed: number;
+    steps: number | null;
+    seconds: number | null;
+    negative_prompt: string | null;
+  };
+};
+
+export type Capability = "chat" | "image" | "video" | "transcription" | "speech";
 
 export type ModelInfo = {
   id: string;
@@ -220,6 +316,10 @@ export type ModelInfo = {
   name?: string;
   default_size?: number;
   negative_prompt?: boolean;
+  default_width?: number;
+  default_height?: number;
+  default_frames?: number;
+  fps?: number;
 };
 
 export type ChatSettings = { mode?: "chat" | "agent"; web?: boolean; workspace?: string | null };
@@ -308,8 +408,12 @@ export type GalleryImage = {
 export type Variant = {
   tag: string;
   params: string;
-  size_gb: number;
-  needed_gb: number;
+  size_gb: number | null;
+  size_estimated?: boolean;
+  requires_token?: boolean;
+  gated?: boolean;
+  best?: boolean;
+  needed_gb: number | null;
   use_cases: string[];
   fit: Fit;
   installed: boolean;
@@ -326,6 +430,10 @@ export type Family = {
   engine_available: boolean;
   engine_installed: boolean;
   tools?: boolean;
+  source?: "curated" | "ollama" | "huggingface";
+  url?: string;
+  popularity?: number;
+  unsupported?: string | null;
   engine_note: string | null;
   use_cases: string[];
   variants: Variant[];
@@ -348,6 +456,7 @@ export type Catalog = {
   families: Family[];
   recommendations: Record<string, string[]>;
   ollama_online: boolean;
+  hf_token_set: boolean;
 };
 
 export type InstalledModel = {

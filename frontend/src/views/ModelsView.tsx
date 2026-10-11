@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Api,
   setPref,
+  type BrowseResult,
   type Capability,
   type Catalog,
   type Family,
@@ -9,6 +10,7 @@ import {
   type Hardware,
   type InstalledModel,
   type PullState,
+  type SortKey,
   type Variant,
 } from "../api";
 
@@ -16,6 +18,7 @@ type Props = {
   api: Api;
   onModelsChanged: () => void;
   onUseModel: (capability: Capability) => void;
+  onOpenSettings: () => void;
 };
 
 const FIT_LABEL: Record<Fit, string> = {
@@ -27,12 +30,32 @@ const FIT_LABEL: Record<Fit, string> = {
   unknown: "Unknown fit",
 };
 
-export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
+const SORTS: { id: SortKey; label: string; hint: string }[] = [
+  { id: "perfect", label: "Perfect match", hint: "The most capable models that still run well on your hardware" },
+  { id: "fit", label: "Best fit", hint: "Most headroom first" },
+  { id: "popular", label: "Most popular", hint: "Downloads / pulls" },
+  { id: "size_desc", label: "Largest first", hint: "" },
+  { id: "size_asc", label: "Smallest first", hint: "" },
+  { id: "name", label: "Name", hint: "" },
+];
+
+const SOURCE_LABEL = { curated: "Recommended", ollama: "Ollama", huggingface: "Hugging Face" } as const;
+
+type Actions = {
+  install: (v: Variant, f: Family) => void;
+  remove: (tag: string) => void;
+  use: (v: Variant, f: Family) => void;
+  pulls: Record<string, PullState>;
+  hfTokenSet: boolean;
+  onOpenSettings: () => void;
+};
+
+export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }: Props) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [installed, setInstalled] = useState<InstalledModel[]>([]);
   const [pulls, setPulls] = useState<Record<string, PullState>>({});
-  const [filter, setFilter] = useState("all");
   const [error, setError] = useState("");
+  const [browseKey, setBrowseKey] = useState(0);
   const seenDone = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
@@ -54,11 +77,11 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
       newlyDone.forEach((p) => seenDone.current.add(p.model));
       if (newlyDone.some((p) => !p.error)) {
         await refresh();
+        setBrowseKey((k) => k + 1);
         onModelsChanged();
       }
-      return list.some((p) => !p.done);
     } catch {
-      return false;
+      // transient; next poll retries
     }
   }, [api, refresh, onModelsChanged]);
 
@@ -74,12 +97,13 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
     return () => clearInterval(t);
   }, [active, pollPulls]);
 
-  async function install(tag: string) {
+  async function install(v: Variant, f: Family) {
     setError("");
     try {
-      seenDone.current.delete(tag);
-      const state = await api.pull(tag);
-      setPulls((p) => ({ ...p, [tag]: state }));
+      seenDone.current.delete(v.tag);
+      const engine = f.engine === "ollama" ? undefined : f.engine;
+      const state = await api.pull(v.tag, engine);
+      setPulls((p) => ({ ...p, [v.tag]: state }));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -90,45 +114,43 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
     try {
       await api.deleteModel(tag);
       await refresh();
+      setBrowseKey((k) => k + 1);
       onModelsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  function use(tag: string) {
-    const entry = variantsByTag.get(tag);
-    const engine = entry?.family.engine ?? "ollama";
-    if (engine === "image") {
-      setPref("imageModel", `image/${tag}`);
-      onUseModel("image");
-    } else if (engine === "audio") {
-      onUseModel(entry!.variant.use_cases.includes("speech") ? "speech" : "transcription");
+  function use(v: Variant, f: Family) {
+    if (f.engine === "image") {
+      const video = f.use_cases.includes("video");
+      setPref(video ? "videoModel" : "imageModel", `image/${v.tag}`);
+      onUseModel(video ? "video" : "image");
+    } else if (f.engine === "audio") {
+      onUseModel(v.use_cases.includes("speech") ? "speech" : "transcription");
     } else {
-      setPref("model", `ollama/${tag}`);
+      setPref("model", `ollama/${v.tag}`);
       onUseModel("chat");
     }
   }
-
-  const variantsByTag = new Map(
-    (catalog?.families ?? []).flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)),
-  );
 
   if (!catalog) {
     return <div className="page">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</div>;
   }
 
-  const families = catalog.families.filter((f) => filter === "all" || f.use_cases.includes(filter));
+  const variantsByTag = new Map(
+    catalog.families.flatMap((f) => f.variants.map((v) => [v.tag, { family: f, variant: v }] as const)),
+  );
+  const actions: Actions = { install, remove, use, pulls, hfTokenSet: catalog.hf_token_set, onOpenSettings };
   const catalogTags = new Set(variantsByTag.keys());
   const extraInstalled = installed.filter((m) => !catalogTags.has(m.name));
-  const actions = { install, remove, use, pulls };
 
   return (
     <div className="page">
       <h1>Models</h1>
       <HardwareCard hw={catalog.hardware} />
       {!catalog.ollama_online && (
-        <p className="error">The Ollama engine isn't reachable, so models can't be installed right now.</p>
+        <p className="error">The Ollama engine isn't reachable, so chat models can't be installed right now.</p>
       )}
       {error && <p className="error">{error}</p>}
 
@@ -150,14 +172,19 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
                   </div>
                   <div className="rec-pick">
                     <div>
-                      <div>{entry.family.name} <span className="muted">{entry.variant.params}</span></div>
+                      <div>
+                        {entry.family.name} <span className="muted">{entry.variant.params}</span>
+                      </div>
                       <div className="muted small">{entry.variant.size_gb} GB download</div>
                     </div>
-                    <VariantAction v={entry.variant} {...actions} />
+                    <VariantAction v={entry.variant} f={entry.family} {...actions} />
                   </div>
                   {alts.length > 0 && (
                     <div className="muted small">
-                      Also good: {alts.map((t) => variantsByTag.get(t)!.family.name + " " + variantsByTag.get(t)!.variant.params).join(", ")}
+                      Also good:{" "}
+                      {alts
+                        .map((t) => `${variantsByTag.get(t)!.family.name} ${variantsByTag.get(t)!.variant.params}`)
+                        .join(", ")}
                     </div>
                   )}
                 </div>
@@ -166,32 +193,11 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
         </div>
       </section>
 
-      <section>
-        <h2>Browse</h2>
-        <div className="chips">
-          <button className={filter === "all" ? "chip active" : "chip"} onClick={() => setFilter("all")}>
-            All
-          </button>
-          {catalog.use_cases.map((u) => (
-            <button
-              key={u.id}
-              className={filter === u.id ? "chip active" : "chip"}
-              onClick={() => setFilter(u.id)}
-            >
-              {u.name}
-            </button>
-          ))}
-        </div>
-        <div className="family-list">
-          {families.map((f) => (
-            <FamilyCard key={f.id} family={f} useCases={catalog.use_cases} {...actions} />
-          ))}
-        </div>
-      </section>
+      <Browse key={browseKey} api={api} useCases={catalog.use_cases} actions={actions} />
 
       <section>
-        <h2>Install any model</h2>
-        <CustomPull onInstall={install} />
+        <h2>Install by name</h2>
+        <CustomPull onInstall={(tag) => install({ tag } as Variant, { engine: "ollama" } as Family)} />
         {extraInstalled.length > 0 && (
           <>
             <h3>Other installed models</h3>
@@ -203,8 +209,12 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
                     {[m.parameters, m.quantization, `${m.size_gb} GB`].filter(Boolean).join(" · ")}
                   </span>
                   <span className="row-actions">
-                    <button className="secondary" onClick={() => use(m.name)}>Use</button>
-                    <button className="link danger" onClick={() => remove(m.name)}>Delete</button>
+                    <button className="secondary" onClick={() => use({ tag: m.name, use_cases: ["chat"] } as unknown as Variant, { engine: "ollama", use_cases: ["chat"] } as unknown as Family)}>
+                      Use
+                    </button>
+                    <button className="link danger" onClick={() => remove(m.name)}>
+                      Delete
+                    </button>
                   </span>
                 </div>
               ))}
@@ -216,15 +226,114 @@ export function ModelsView({ api, onModelsChanged, onUseModel }: Props) {
   );
 }
 
+function Browse({ api, useCases, actions }: { api: Api; useCases: Catalog["use_cases"]; actions: Actions }) {
+  const [category, setCategory] = useState("all");
+  const [sort, setSort] = useState<SortKey>("perfect");
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [runnable, setRunnable] = useState(false);
+  const [result, setResult] = useState<BrowseResult | null>(null);
+  const [families, setFamilies] = useState<Family[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const PAGE = 30;
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 400);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const load = useCallback(
+    async (offset: number) => {
+      setLoading(true);
+      setError("");
+      try {
+        const r = await api.browse({ category, sort, q: debounced, runnable, offset, limit: PAGE });
+        setResult(r);
+        setFamilies((prev) => (offset === 0 ? r.families : [...prev, ...r.families]));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api, category, sort, debounced, runnable],
+  );
+
+  useEffect(() => {
+    void load(0);
+  }, [load]);
+
+  const sortHint = SORTS.find((s) => s.id === sort)?.hint;
+
+  return (
+    <section>
+      <h2>Browse all models</h2>
+      <p className="muted small">
+        The whole Ollama library plus image, video and speech models from Hugging Face, rated for your hardware.
+      </p>
+      <div className="browse-controls">
+        <input
+          className="browse-search"
+          type="search"
+          placeholder="Search models… (also searches Hugging Face GGUF models)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
+          {SORTS.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <label className="auto-approve">
+          <input type="checkbox" checked={runnable} onChange={(e) => setRunnable(e.target.checked)} />
+          Only models that run here
+        </label>
+      </div>
+      {sortHint && <p className="muted small sort-hint">{sortHint}</p>}
+      <div className="chips">
+        <button className={category === "all" ? "chip active" : "chip"} onClick={() => setCategory("all")}>
+          All
+        </button>
+        {useCases.map((u) => (
+          <button key={u.id} className={category === u.id ? "chip active" : "chip"} onClick={() => setCategory(u.id)}>
+            {u.id === "chat" ? "General" : u.name}
+          </button>
+        ))}
+      </div>
+      {error && <p className="error">{error}</p>}
+      {result && (
+        <p className="muted small">
+          {result.total.toLocaleString()} model families{debounced ? ` matching "${debounced}"` : ""}
+        </p>
+      )}
+      <div className="family-list">
+        {families.map((f) => (
+          <FamilyCard key={f.id} family={f} useCases={useCases} {...actions} />
+        ))}
+      </div>
+      {loading && <p className="muted">Loading…</p>}
+      {result && families.length < result.total && !loading && (
+        <button className="secondary load-more" onClick={() => void load(families.length)}>
+          Show more ({result.total - families.length} more)
+        </button>
+      )}
+    </section>
+  );
+}
+
 function HardwareCard({ hw }: { hw: Hardware }) {
-  const gpu = hw.gpus.length
-    ? hw.gpus.map((g) => `${g.name} (${g.vram_total_gb} GB)`).join(", ")
-    : "No NVIDIA GPU detected";
+  const gpu = hw.gpus.length ? hw.gpus.map((g) => `${g.name} (${g.vram_total_gb} GB)`).join(", ") : "No NVIDIA GPU detected";
   return (
     <div className="card hardware">
       <div>
         <div className="muted small">GPU</div>
-        <div>{gpu}{hw.vram_override && <span className="muted small"> · set by AMY_GPU_VRAM_GB</span>}</div>
+        <div>
+          {gpu}
+          {hw.vram_override && <span className="muted small"> · set by AMY_GPU_VRAM_GB</span>}
+        </div>
       </div>
       <div>
         <div className="muted small">Memory</div>
@@ -236,8 +345,8 @@ function HardwareCard({ hw }: { hw: Hardware }) {
       </div>
       {!hw.gpus.length && (
         <p className="muted small full">
-          Models will run on the CPU, which is much slower. Have an NVIDIA GPU? Make sure the container
-          runs with GPU access (Unraid: <code>--runtime=nvidia</code>; Docker: <code>--gpus all</code>).
+          Models will run on the CPU, which is much slower. Have an NVIDIA GPU? Make sure the container runs with GPU
+          access (Unraid: <code>--runtime=nvidia</code>; Docker: <code>--gpus all</code>).
         </p>
       )}
     </div>
@@ -265,56 +374,62 @@ function ActivePulls({ pulls }: { pulls: PullState[] }) {
   );
 }
 
-function FamilyCard({
-  family,
-  useCases,
-  ...actions
-}: { family: Family; useCases: Catalog["use_cases"] } & ActionProps) {
-  const names = Object.fromEntries(useCases.map((u) => [u.id, u.name]));
+function FamilyCard({ family, useCases, ...actions }: { family: Family; useCases: Catalog["use_cases"] } & Actions) {
+  const names = Object.fromEntries(useCases.map((u) => [u.id, u.id === "chat" ? "General" : u.name]));
+  const source = family.source ?? "curated";
   return (
     <div className="card family">
       <div className="family-head">
-        <div>
-          <strong>{family.name}</strong> <span className="muted small">by {family.publisher}</span>
+        <div className="family-title">
+          <strong>{family.name}</strong>
+          <span className="muted small"> by {family.publisher}</span>
+          <span className={`tag source-${source}`}>{SOURCE_LABEL[source]}</span>
+          {family.url && (
+            <a className="small" href={family.url} target="_blank" rel="noreferrer" title="Open model page">
+              ↗
+            </a>
+          )}
         </div>
         <div className="tags">
           {family.use_cases.map((u) => (
-            <span key={u} className="tag">{names[u] ?? u}</span>
+            <span key={u} className="tag">
+              {names[u] ?? u}
+            </span>
           ))}
-          {family.tools && <span className="tag tools" title="Can use web search and agent mode">Tools</span>}
-          {!family.engine_available && <span className="tag soon">Coming soon</span>}
+          {family.tools && (
+            <span className="tag tools" title="Can use web search and agent mode">
+              Tools
+            </span>
+          )}
         </div>
       </div>
-      <p className="muted small">{family.description} <span className="license">License: {family.license}</span></p>
+      <p className="muted small">
+        {family.description}
+        {family.license && <span className="license">License: {family.license}</span>}
+        {!!family.popularity && <span className="license">{compact(family.popularity)} downloads</span>}
+      </p>
       {family.engine_note && <p className="engine-note small">{family.engine_note}</p>}
+      {family.unsupported && <p className="engine-note small">{family.unsupported}</p>}
       {family.variants.map((v) => (
-        <div key={v.tag} className="variant-row">
-          <span>{v.params}</span>
-          <span className="muted small">{v.size_gb} GB</span>
-          {family.engine_available ? (
-            <>
-              <span className={`fit fit-${v.fit}`} title={`Needs about ${v.needed_gb} GB of memory`}>
-                {FIT_LABEL[v.fit]}
-              </span>
-              <VariantAction v={v} {...actions} />
-            </>
-          ) : (
-            <span className="muted small row-actions">Engine support planned</span>
-          )}
+        <div key={v.tag} className={`variant-row ${v.best ? "best" : ""}`}>
+          <span>
+            {v.params || family.name}
+            {v.best && <span className="tag best-tag" title="The biggest model that runs well on your hardware">Perfect match</span>}
+          </span>
+          <span className="muted small" title={v.size_estimated ? "Estimated; exact size is known at install" : undefined}>
+            {v.size_gb != null ? `${v.size_estimated ? "~" : ""}${v.size_gb} GB` : "?"}
+          </span>
+          <span className={`fit fit-${v.fit}`} title={v.needed_gb ? `Needs about ${v.needed_gb} GB of memory` : undefined}>
+            {FIT_LABEL[v.fit]}
+          </span>
+          {family.unsupported ? <span className="row-actions muted small">Not supported yet</span> : <VariantAction v={v} f={family} {...actions} />}
         </div>
       ))}
     </div>
   );
 }
 
-type ActionProps = {
-  install: (tag: string) => void;
-  remove: (tag: string) => void;
-  use: (tag: string) => void;
-  pulls: Record<string, PullState>;
-};
-
-function VariantAction({ v, install, remove, use, pulls }: { v: Variant } & ActionProps) {
+function VariantAction({ v, f, install, remove, use, pulls, onOpenSettings }: { v: Variant; f: Family } & Actions) {
   const pull = pulls[v.tag];
   if (pull && !pull.done) {
     return (
@@ -327,9 +442,22 @@ function VariantAction({ v, install, remove, use, pulls }: { v: Variant } & Acti
     return (
       <span className="row-actions">
         {!v.use_cases.includes("embedding") && (
-          <button className="secondary" onClick={() => use(v.tag)}>Use</button>
+          <button className="secondary" onClick={() => use(v, f)}>
+            Use
+          </button>
         )}
-        <button className="link danger" onClick={() => remove(v.tag)}>Delete</button>
+        <button className="link danger" onClick={() => remove(v.tag)}>
+          Delete
+        </button>
+      </span>
+    );
+  }
+  if (v.requires_token) {
+    return (
+      <span className="row-actions">
+        <button className="secondary token-needed" onClick={onOpenSettings} title="This model is gated. Add a Hugging Face token in Settings.">
+          Requires Hugging Face token
+        </button>
       </span>
     );
   }
@@ -340,8 +468,12 @@ function VariantAction({ v, install, remove, use, pulls }: { v: Variant } & Acti
         className={risky ? "secondary" : "primary"}
         title={!v.disk_ok ? "Not enough free disk space" : undefined}
         onClick={() => {
-          if (risky && !confirm(`${v.tag} probably won't run well on this machine${v.disk_ok ? "" : " and may not fit on disk"}. Download anyway?`)) return;
-          install(v.tag);
+          if (
+            risky &&
+            !confirm(`${v.tag} probably won't run well on this machine${v.disk_ok ? "" : " and may not fit on disk"}. Download anyway?`)
+          )
+            return;
+          install(v, f);
         }}
       >
         Install
@@ -372,8 +504,7 @@ function CustomPull({ onInstall }: { onInstall: (tag: string) => void }) {
         Install
       </button>
       <p className="muted small full">
-        Any model from <a href="https://ollama.com/library" target="_blank" rel="noreferrer">ollama.com/library</a> or
-        a GGUF repo on Hugging Face (<code>hf.co/user/repo:quant</code>).
+        Any Ollama tag, or a GGUF repo on Hugging Face (<code>hf.co/user/repo:quant</code>).
       </p>
     </form>
   );
@@ -388,3 +519,7 @@ function Progress({ value, small }: { value: number; small?: boolean }) {
 }
 
 const gb = (bytes: number) => (bytes / 1e9).toFixed(2);
+
+function compact(n: number): string {
+  return Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}

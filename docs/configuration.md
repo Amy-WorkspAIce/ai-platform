@@ -17,6 +17,7 @@ All settings are environment variables. None are required.
 | `AMY_SEARXNG_URL` | *(bundled)* | Use your own SearXNG instead, e.g. `http://192.168.1.10:8080` (JSON output must be enabled). Blank means the bundled one. |
 | `AMY_BRAVE_API_KEY` | *(none)* | Brave Search API key. |
 | `AMY_WEB_ALLOW_PRIVATE` | `false` | Let `fetch_url` reach private/LAN addresses. |
+| `AMY_HF_TOKEN` | *(none)* | Hugging Face token for gated models. Normally set on the **Settings** page; this variable overrides it and makes it read-only there. |
 | `AMY_GITHUB_TOKEN` | *(none)* | Token for agent git operations on github.com (clone private repos, push). Use a fine-grained token. |
 | `AMY_AGENT_MAX_STEPS` | `40` | Maximum model turns per agent request. |
 | `AMY_AGENT_COMMAND_TIMEOUT` | `600` | Maximum seconds per agent command. |

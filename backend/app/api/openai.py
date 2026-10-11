@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 from app import catalog
-from app.engines import ENGINES
 from app.security import require_api_key
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)])
@@ -41,22 +40,21 @@ async def list_models(request: Request) -> dict:
     # Installed image/audio models, e.g. "image/sdxl-base-1.0" (capability: image,
     # transcription or speech).
     engines = request.app.state.engines
-    for fam in catalog.load()["families"]:
-        if fam["engine"] not in ENGINES:
-            continue
-        for v in fam["variants"]:
-            if engines.model_installed(fam["engine"], v["tag"]):
-                data.append(
-                    {
-                        "id": f"{fam['engine']}/{v['tag']}",
-                        "object": "model",
-                        "created": now,
-                        "owned_by": fam["engine"],
-                        "capability": v["engine_config"].get("task", fam["use_cases"][0]),
-                        "name": f"{fam['name']} {v['params']}",
-                        **image_options(v["engine_config"]),
-                    }
-                )
+    for engine, tag, v in sorted(engines.installed_models(), key=lambda m: m[1].lower()):
+        cfg = v.get("engine_config") or {}
+        found = catalog.find_variant(tag)
+        name = f"{found[0]['name']} {v.get('params', '')}".strip() if found else tag.split("/")[-1]
+        data.append(
+            {
+                "id": f"{engine}/{tag}",
+                "object": "model",
+                "created": now,
+                "owned_by": engine,
+                "capability": cfg.get("task") or ("image" if engine == "image" else "speech"),
+                "name": name,
+                **image_options(cfg),
+            }
+        )
     return {"object": "list", "data": data}
 
 
@@ -96,6 +94,14 @@ async def chat_completions(request: Request):
 
 
 def image_options(cfg: dict) -> dict:
+    if cfg.get("task") == "video":
+        return {
+            "default_width": cfg.get("width", 832),
+            "default_height": cfg.get("height", 480),
+            "default_frames": cfg.get("frames", 33),
+            "fps": cfg.get("fps", 16),
+            "negative_prompt": cfg.get("negative_prompt", False),
+        }
     if "size" not in cfg:
         return {}
     return {"default_size": cfg["size"], "negative_prompt": cfg.get("negative_prompt", False)}

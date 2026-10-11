@@ -1,13 +1,16 @@
 """Image generation and audio, OpenAI-compatible where possible.
 
 - ``POST /v1/images/generations``    text-to-image (saved to the gallery)
+- ``POST /v1/videos/generations``    text-to-video, as a background job (minutes)
 - ``POST /v1/audio/transcriptions``  speech-to-text (multipart upload)
 - ``POST /v1/audio/speech``          text-to-speech (returns audio bytes)
 - ``/api/images``                    gallery: list, fetch, delete
 - ``GET /api/audio/voices``          voices for a text-to-speech model
 """
 
+import asyncio
 import base64
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -25,6 +28,7 @@ v1 = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)])
 api = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
 
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
+log = logging.getLogger(__name__)
 
 
 def resolve(
@@ -32,15 +36,18 @@ def resolve(
 ) -> tuple[Path, dict]:
     """Map ``image/<tag>`` (or a bare tag) to an installed engine model."""
     tag = model.removeprefix(f"{engine}/")
-    found = catalog.find_variant(tag)
-    if not found or found[0]["engine"] != engine:
-        raise HTTPException(404, f"Unknown {engine} model '{model}'")
-    _, variant = found
-    if task and variant["engine_config"].get("task") != task:
-        raise HTTPException(400, f"'{model}' does not support {task}")
     engines: EngineManager = request.app.state.engines
-    if not engines.model_installed(engine, tag):
-        raise HTTPException(409, f"'{model}' is not installed. Install it from the Models page.")
+    variant = engines.installed_variant(engine, tag)
+    if variant is None:
+        found = catalog.find_variant(tag)
+        if found and found[0]["engine"] == engine:
+            raise HTTPException(
+                409, f"'{model}' is not installed. Install it from the Models page."
+            )
+        raise HTTPException(404, f"Unknown {engine} model '{model}'")
+    actual = variant["engine_config"].get("task") or ("image" if engine == "image" else None)
+    if task and actual != task:
+        raise HTTPException(400, f"'{model}' does not support {task}")
     return engines.model_dir(engine, tag), variant
 
 
@@ -84,9 +91,9 @@ def parse_size(size: str | None, default: int) -> tuple[int, int]:
 
 @v1.post("/images/generations")
 async def generate_image(request: Request, body: ImageRequest) -> dict:
-    model_dir, variant = resolve(request, body.model, "image")
+    model_dir, variant = resolve(request, body.model, "image", "image")
     cfg = variant["engine_config"]
-    width, height = parse_size(body.size, cfg["size"])
+    width, height = parse_size(body.size, cfg.get("size") or 1024)
 
     # Language models may be holding GPU memory; release it for the image pipeline.
     if request.app.state.ollama_admin:
@@ -113,8 +120,8 @@ async def generate_image(request: Request, body: ImageRequest) -> dict:
     params = {
         "width": width,
         "height": height,
-        "steps": body.steps or cfg["steps"],
-        "guidance": body.guidance if body.guidance is not None else cfg["guidance"],
+        "steps": body.steps or cfg.get("steps"),
+        "guidance": body.guidance if body.guidance is not None else cfg.get("guidance"),
         "seed": result["seed"],
         "negative_prompt": payload["negative_prompt"],
         "seconds": result.get("generate_seconds"),
@@ -229,3 +236,133 @@ async def voices(request: Request, model: str) -> dict:
     except EngineError as exc:
         raise engine_error(exc) from exc
     return resp.json()
+
+
+# ---- video ----
+
+
+class VideoRequest(BaseModel):
+    model: str
+    prompt: str = Field(min_length=1, max_length=4000)
+    negative_prompt: str | None = None
+    width: int | None = Field(default=None, ge=256, le=1920)
+    height: int | None = Field(default=None, ge=256, le=1920)
+    frames: int | None = Field(default=None, ge=9, le=241)
+    fps: int | None = Field(default=None, ge=4, le=60)
+    steps: int | None = Field(default=None, ge=1, le=100)
+    seed: int | None = None
+
+
+def videos_dir(request: Request) -> Path:
+    d = request.app.state.settings.data_dir / "videos"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _round(x: int, to: int) -> int:
+    return max(to, round(x / to) * to)
+
+
+@v1.post("/videos/generations", status_code=202)
+async def generate_video(request: Request, body: VideoRequest) -> dict:
+    """Start a text-to-video job. Poll ``GET /api/videos/jobs`` for progress."""
+    model_dir, variant = resolve(request, body.model, "image", "video")
+    cfg = variant["engine_config"]
+    video_id = uuid.uuid4().hex
+    width = _round(body.width or cfg.get("width", 832), 32)
+    height = _round(body.height or cfg.get("height", 480), 32)
+    # Video models want 4k+1 (Wan) or 8k+1 (LTX) frames; 8k+1 satisfies both.
+    frames = (max(9, body.frames or cfg.get("frames", 33)) - 1) // 8 * 8 + 1
+    fps = body.fps or cfg.get("fps", 16)
+    job = {
+        "id": video_id,
+        "model": f"image/{variant['tag']}",
+        "prompt": body.prompt,
+        "status": "queued",
+        "phase": "queued",
+        "step": 0,
+        "steps": 0,
+        "error": None,
+        "started_at": time.time(),
+        "params": {"width": width, "height": height, "frames": frames, "fps": fps},
+    }
+    jobs: dict = request.app.state.video_jobs
+    jobs[video_id] = job
+    payload = {
+        "model_dir": str(model_dir),
+        "config": cfg,
+        "prompt": body.prompt,
+        "negative_prompt": body.negative_prompt if cfg.get("negative_prompt") else None,
+        "width": width,
+        "height": height,
+        "frames": frames,
+        "fps": fps,
+        "steps": body.steps,
+        "seed": body.seed,
+        "output": str(videos_dir(request) / f"{video_id}.mp4"),
+    }
+    task = asyncio.create_task(_run_video(request.app, job, payload))
+    request.app.state.background_tasks.add(task)
+    task.add_done_callback(request.app.state.background_tasks.discard)
+    return {"id": video_id, "status": "queued"}
+
+
+async def _run_video(app, job: dict, payload: dict) -> None:
+    try:
+        job["status"] = "running"
+        if app.state.ollama_admin:
+            await app.state.ollama_admin.unload_all()
+        result = (
+            await app.state.engines.call("image", "/generate_video", payload, timeout=4 * 3600)
+        ).json()
+        params = job["params"] | {
+            "seed": result["seed"],
+            "seconds": result.get("generate_seconds"),
+            "negative_prompt": payload["negative_prompt"],
+            "steps": payload["steps"] or payload["config"].get("steps"),
+        }
+        app.state.db.add_video(job["id"], job["model"], job["prompt"], params)
+        job.update(status="done", phase="done", params=params)
+    except EngineError as exc:
+        job.update(status="error", error=str(exc))
+    except Exception as exc:  # surface anything unexpected in the UI
+        log.exception("Video generation failed")
+        job.update(status="error", error=f"{type(exc).__name__}: {exc}")
+    finally:
+        job["finished_at"] = time.time()
+
+
+@api.get("/videos/jobs")
+async def video_jobs(request: Request) -> list[dict]:
+    jobs: dict = request.app.state.video_jobs
+    cutoff = time.time() - 3600
+    for k in [k for k, j in jobs.items() if j.get("finished_at", time.time()) < cutoff]:
+        jobs.pop(k)
+    running = [j for j in jobs.values() if j["status"] == "running"]
+    if running:
+        progress = await request.app.state.engines.peek("image", "/progress")
+        if progress:
+            running[0].update(
+                phase=progress["phase"], step=progress["step"], steps=progress["steps"]
+            )
+    return sorted(jobs.values(), key=lambda j: j["started_at"], reverse=True)
+
+
+@api.get("/videos")
+def list_videos(request: Request) -> list[dict]:
+    return request.app.state.db.list_videos()
+
+
+@api.get("/videos/{video_id}")
+def get_video(request: Request, video_id: str) -> FileResponse:
+    path = videos_dir(request) / f"{video_id}.mp4"
+    if not video_id.isalnum() or not path.exists():
+        raise HTTPException(404, "Video not found")
+    return FileResponse(path, media_type="video/mp4")
+
+
+@api.delete("/videos/{video_id}", status_code=204)
+def delete_video(request: Request, video_id: str) -> None:
+    if not video_id.isalnum() or not request.app.state.db.delete_video(video_id):
+        raise HTTPException(404, "Video not found")
+    (videos_dir(request) / f"{video_id}.mp4").unlink(missing_ok=True)

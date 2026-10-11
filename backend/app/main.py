@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__, hardware
 from app.agent import RunRegistry
 from app.api import agent, conversations, media, models, openai, system
+from app.api import settings as settings_api
+from app.catalog.live import LiveCatalog
 from app.config import Settings, get_settings
 from app.db import Database
 from app.engines import EngineManager
@@ -19,6 +21,7 @@ from app.jobs import JobRegistry
 from app.ollama_admin import OllamaAdmin
 from app.providers import ProviderRegistry
 from app.security import load_or_create_api_key
+from app.user_settings import UserSettings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -29,6 +32,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.http = httpx.AsyncClient(timeout=settings.upstream_timeout)
+        app.state.live_catalog = LiveCatalog(
+            settings.data_dir / "cache" / "catalog",
+            app.state.http,
+            hf_token=lambda: app.state.user_settings.hf_token,
+        )
         if settings.ollama_url:
             app.state.ollama_admin = OllamaAdmin(
                 settings.ollama_url, app.state.http, app.state.jobs
@@ -43,6 +51,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.providers = ProviderRegistry.from_settings(settings)
     app.state.ollama_admin = None
     app.state.jobs = JobRegistry()
+    app.state.video_jobs = {}
+    app.state.background_tasks = set()
+    app.state.user_settings = UserSettings(settings.data_dir, settings.hf_token)
     app.state.agent_runs = RunRegistry()
     app.state.db = Database(settings.data_dir / "amy.db")
     app.state.engines = EngineManager(
@@ -66,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models.router)
     app.include_router(conversations.router)
     app.include_router(agent.router)
+    app.include_router(settings_api.router)
     app.include_router(media.api)
     app.include_router(media.v1)
     app.include_router(openai.router)

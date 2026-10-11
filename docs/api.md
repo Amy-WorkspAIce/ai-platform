@@ -18,6 +18,7 @@ All endpoints except `/health` require `Authorization: Bearer <api key>`.
 | POST | `/v1/chat/completions` | Standard OpenAI chat request. Supports `stream: true` (SSE). The request is forwarded to the provider unchanged, except that `model` is rewritten to the upstream name. |
 
 | POST | `/v1/images/generations` | OpenAI-style image request: `model` (`image/<tag>`), `prompt`, `n`, `size`. Extensions: `negative_prompt`, `steps`, `guidance`, `seed`. Returns `b64_json` images; they are also saved to the gallery. |
+| POST | `/v1/videos/generations` | `{"model": "image/<repo>", "prompt", "negative_prompt"?, "width"?, "height"?, "frames"?, "fps"?, "steps"?, "seed"?}` → `202 {"id"}`. Runs in the background; poll `/api/videos/jobs`. |
 | POST | `/v1/audio/transcriptions` | Multipart upload: `file`, `model` (`audio/whisper-...`), optional `language`, `response_format` (`json`, `text`, `verbose_json`). |
 | POST | `/v1/audio/speech` | `{"model": "audio/kokoro-82m", "input": "...", "voice": "af_heart", "speed": 1.0, "response_format": "wav"}`. Returns audio (`wav`, `flac` or `ogg`). |
 
@@ -33,8 +34,11 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/system` | Version and provider status. |
 | GET | `/api/hardware` | Detected GPUs (VRAM), RAM, CPU count, free disk in `/data`. |
 | GET | `/api/catalog` | Curated model catalog annotated with `fit`, `installed`, `needed_gb` per variant, plus `recommendations` per use case. |
+| GET | `/api/catalog/browse` | Everything: curated + Ollama library + Hugging Face (image, video, speech; GGUF when searching). Query: `category`, `q`, `sort` (`perfect`, `fit`, `size_asc`, `size_desc`, `name`, `popular`), `runnable`, `offset`, `limit`. Each family's best variant for this machine has `best: true`; gated variants without a token have `requires_token: true`. |
+| GET | `/api/settings` | Settings page data (Hugging Face status, search providers, version). |
+| PUT/DELETE | `/api/settings/huggingface` | Save (`{"token"}`, validated with Hugging Face) or remove the Hugging Face token. |
 | GET | `/api/models/installed` | Models installed in Ollama. |
-| POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`. |
+| POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`; for Hugging Face diffusers/whisper repos add `"engine": "image"` or `"audio"` (the download plan is worked out from the repo). |
 | GET | `/api/models/pulls` | Progress of active and recent downloads (`status`, `completed`, `total`, `done`, `error`). |
 | DELETE | `/api/models/{model}` | Deletes an installed model. |
 | GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model"}`) saved chats. |
@@ -43,6 +47,9 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/images` | Gallery of generated images (prompt, model, parameters). |
 | GET/DELETE | `/api/images/{id}` | Fetch the PNG, or delete it. |
 | GET | `/api/audio/voices?model=audio/kokoro-82m` | Voices for a text-to-speech model. |
+| GET | `/api/videos/jobs` | Video jobs with live progress (`phase`, `step`, `steps`, `status`, `error`). |
+| GET | `/api/videos` | Video gallery. |
+| GET/DELETE | `/api/videos/{id}` | Fetch the MP4, or delete it. |
 | POST | `/api/agent/chat` | Tool-using chat. Body: `model`, `message`, `conversation_id?`, `mode` (`chat` or `agent`), `web` (bool), `workspace?`, `auto_approve`. Streams server-sent events: `start`, `text`, `reasoning`, `tool_call`, `tool_result`, `error`, `done`. Saves the conversation, including tool calls. |
 | POST | `/api/agent/runs/{run_id}/approve` | `{"call_id", "approve", "always"}`: answer a pending approval. |
 | GET/POST | `/api/workspaces` | List workspaces (with git branch/changes) or create one: `{"name", "git_url"?}`. |

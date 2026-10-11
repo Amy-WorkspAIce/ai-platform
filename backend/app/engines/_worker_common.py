@@ -31,8 +31,11 @@ def json_response(data: dict, status: int = 200) -> Response:
 def serve(port: int, routes: dict[str, Route]) -> None:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - stdlib API
+            route = routes.get(f"GET {self.path}")
             if self.path == "/health":
                 self._send(*json_response({"status": "ok"}))
+            elif route is not None:
+                self._send(*route({}))
             else:
                 self._send(*json_response({"error": "not found"}, 404))
 
@@ -90,7 +93,9 @@ def download(spec: dict, dest: Path) -> None:
         raise ValueError(f"Unknown source type {spec['type']!r}")
 
 
-def main(routes: dict[str, Route]) -> None:
+def main(
+    routes: dict[str, Route], after_download: Callable[[Path, dict], None] | None = None
+) -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
@@ -98,9 +103,12 @@ def main(routes: dict[str, Route]) -> None:
     d = sub.add_parser("download")
     d.add_argument("--spec", required=True, help="JSON source spec")
     d.add_argument("--dest", required=True)
+    d.add_argument("--config", default="{}", help="JSON engine config, for post-download steps")
     args = parser.parse_args()
     if args.cmd == "serve":
         serve(args.port, routes)
     else:
         download(json.loads(args.spec), Path(args.dest))
+        if after_download:
+            after_download(Path(args.dest), json.loads(args.config))
         sys.exit(0)

@@ -50,19 +50,21 @@ backend/            Python 3.11+ / FastAPI
   app/security.py   API key generation + bearer auth
   app/providers/    model providers (OpenAI-compatible, Ollama) + registry
   app/hardware.py   GPU/RAM/disk detection (nvidia-smi, /proc/meminfo)
-  app/catalog/      curated model catalog (catalog.json), fit + recommendations
+  app/catalog/      curated catalog (catalog.json), fit, Perfect-match ranking, browse;
+                    live.py: Ollama library + Hugging Face listings, diffusers install plans
   app/ollama_admin.py  install (background pulls + GPU warm-up), list, delete
   app/jobs.py       background install jobs with pollable progress
   app/engines/      on-demand engines for images/audio: installer, worker supervisor,
                     and the worker scripts that run inside each engine's own venv
-  app/db.py         SQLite: conversations, messages (incl. tool calls), image gallery
+  app/db.py         SQLite: conversations, messages (incl. tool calls), image + video galleries
+  app/user_settings.py  Settings-page values (Hugging Face token in /data/secrets)
   app/agent.py      tool-calling loop, approvals, streaming events
   app/tools/        web (search providers, page fetch with LAN blocking), workspace
                     (confined file tools, shell commands with scrubbed env)
   app/api/          routers: system, models, conversations, agent, media, openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
-  src/views/        ChatView, ImagesView, AudioView, ModelsView
+  src/views/        ChatView, ImagesView, VideoView, AudioView, ModelsView, SettingsView
 scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
 deploy/unraid/      Community Applications template
@@ -84,8 +86,22 @@ the platform asks Ollama to unload its models so the image pipeline gets the VRA
 | `image` | torch, diffusers, transformers, accelerate | FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5 |
 | `audio` | faster-whisper (+ cuBLAS/cuDNN on GPU), kokoro-onnx | Whisper, Kokoro |
 
-Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU, per-component
-CPU offload, or sequential offload for small cards.
+Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
+CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB
+video text encoder) are streamed from RAM layer by layer (diffusers group offloading); or
+sequential offload for very small cards. Video generation runs as a background job; the
+worker exposes `GET /progress` for step-level progress.
+
+## Model catalog
+
+The Models page combines the curated `catalog.json` (tuned sizes and recommendations) with
+live listings: the Ollama library (parsed from ollama.com, exact sizes from the Ollama
+registry in the background, cached in `/data/cache/catalog`) and Hugging Face (public API,
+filtered to formats Amy can run: diffusers pipelines, faster-whisper, GGUF). Families are
+categorized by purpose (General, Reasoning, Code, Agent & tools, Vision, Embeddings, Image,
+Video, Speech-to-text, Text-to-speech) and every variant gets a fit rating. **Perfect match**
+sorting ranks the best fit tier first, then the model that uses the most of the hardware.
+Within a family, the biggest variant that runs well is marked as the pick.
 
 ## Model IDs
 

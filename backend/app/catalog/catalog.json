@@ -36,6 +36,11 @@
       "description": "Creates images from text prompts."
     },
     {
+      "id": "video",
+      "name": "Video generation",
+      "description": "Creates short video clips from text. Slow: expect minutes per clip."
+    },
+    {
       "id": "transcription",
       "name": "Speech to text",
       "description": "Transcribes recordings and dictation into text."
@@ -54,7 +59,7 @@
     },
     {
       "id": "image",
-      "name": "Image engine (diffusers + PyTorch)",
+      "name": "Image & video engine (diffusers + PyTorch)",
       "available": true,
       "install_size_gb": 7,
       "note": "Installed automatically with your first image model (about 7 GB, one time)."
@@ -683,6 +688,111 @@
                 "kokoro-v1.0.onnx": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx",
                 "voices-v1.0.bin": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
               }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "wan21",
+      "name": "Wan 2.1",
+      "publisher": "Wan-AI (Alibaba)",
+      "license": "Apache-2.0",
+      "engine": "image",
+      "use_cases": [
+        "video"
+      ],
+      "description": "High-quality text-to-video. The 1.3B version is made for consumer GPUs (480p clips).",
+      "variants": [
+        {
+          "tag": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+          "params": "1.3B",
+          "size_gb": 28.93,
+          "vram_gb": 8,
+          "ram_gb": 18,
+          "min_vram_gb": 6,
+          "engine_config": {
+            "task": "video",
+            "source": {
+              "type": "hf",
+              "repo": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+            },
+            "dtype": "bfloat16",
+            "vae_fp32": true,
+            "components_gb": {
+              "text_encoder": 11.36,
+              "transformer": 2.84,
+              "vae": 0.51
+            },
+            "full_gb": 14.71,
+            "component_gb": 11.36,
+            "width": 832,
+            "height": 480,
+            "frames": 33,
+            "fps": 16,
+            "steps": 30,
+            "guidance": 5.0,
+            "negative_prompt": true,
+            "convert": {
+              "dtype": "bfloat16",
+              "keep_fp32": [
+                "vae"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ltx-video",
+      "name": "LTX-Video",
+      "publisher": "Lightricks",
+      "license": "LTXV Open Weights License",
+      "engine": "image",
+      "use_cases": [
+        "video"
+      ],
+      "description": "Fast text-to-video. Lower quality than Wan, but quicker on modest GPUs.",
+      "variants": [
+        {
+          "tag": "Lightricks/LTX-Video-0.9.5",
+          "params": "2B",
+          "size_gb": 25.64,
+          "vram_gb": 8,
+          "ram_gb": 18,
+          "min_vram_gb": 6,
+          "engine_config": {
+            "task": "video",
+            "source": {
+              "type": "hf",
+              "repo": "Lightricks/LTX-Video-0.9.5",
+              "allow_patterns": [
+                "model_index.json",
+                "scheduler/*",
+                "text_encoder/*",
+                "tokenizer/*",
+                "transformer/*",
+                "vae/*"
+              ]
+            },
+            "dtype": "bfloat16",
+            "components_gb": {
+              "text_encoder": 9.53,
+              "transformer": 3.85,
+              "vae": 1.25
+            },
+            "full_gb": 14.63,
+            "component_gb": 9.53,
+            "width": 768,
+            "height": 512,
+            "frames": 49,
+            "fps": 24,
+            "steps": 30,
+            "guidance": 3.0,
+            "negative_prompt": true,
+            "convert": {
+              "dtype": "bfloat16",
+              "keep_fp32": []
             }
           }
         }

@@ -4,8 +4,10 @@ import { AudioView } from "./views/AudioView";
 import { ChatView } from "./views/ChatView";
 import { ImagesView } from "./views/ImagesView";
 import { ModelsView } from "./views/ModelsView";
+import { SettingsView } from "./views/SettingsView";
+import { VideoView } from "./views/VideoView";
 
-export type View = "chat" | "images" | "audio" | "models";
+export type View = "chat" | "images" | "video" | "audio" | "models" | "settings";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
@@ -120,7 +122,7 @@ export function App() {
           + New chat
         </button>
         <nav>
-          {(["chat", "images", "audio", "models"] as View[]).map((v) => (
+          {(["chat", "images", "video", "audio", "models", "settings"] as View[]).map((v) => (
             <button key={v} className={view === v ? "active" : ""} onClick={() => go(v)}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
@@ -184,6 +186,10 @@ export function App() {
         {view === "images" && (
           <ImagesView api={api} models={byCapability("image")} onBrowseModels={() => go("models")} />
         )}
+        {view === "video" && (
+          <VideoView api={api} models={byCapability("video")} onBrowseModels={() => go("models")} />
+        )}
+        {view === "settings" && <SettingsView api={api} />}
         {view === "audio" && (
           <AudioView
             api={api}
@@ -197,8 +203,17 @@ export function App() {
             api={api}
             onModelsChanged={refreshModels}
             onUseModel={(capability) =>
-              go(capability === "image" ? "images" : capability === "chat" ? "chat" : "audio")
+              go(
+                capability === "image"
+                  ? "images"
+                  : capability === "video"
+                    ? "video"
+                    : capability === "chat"
+                      ? "chat"
+                      : "audio",
+              )
             }
+            onOpenSettings={() => go("settings")}
           />
         )}
       </div>

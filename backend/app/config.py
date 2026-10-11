@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # pages that try to steer the model into probing it).
     web_allow_private: bool = False
 
+    # Hugging Face token for gated models. Normally set on the Settings page; this
+    # environment variable overrides it (and makes it read-only in the UI).
+    hf_token: str | None = None
+
     # Agent mode.
     agent_max_steps: int = 40
     agent_command_timeout: float = 600
