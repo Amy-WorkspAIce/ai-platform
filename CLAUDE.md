@@ -1,6 +1,6 @@
 # Notes for AI coding assistants
 
-This is the **AI Platform** of Amy WorkspAIce: a self-hosted AI service (OpenAI-compatible API
+This is the **AI Platform** of Amy-WorkspAIce: a self-hosted AI service (OpenAI-compatible API
 plus web UI) packaged as a single container, Unraid-first but portable.
 
 - Read `docs/architecture.md` first.
@@ -27,4 +27,9 @@ plus web UI) packaged as a single container, Unraid-first but portable.
 - Memory (`app/memory.py`) and context fitting (`app/context.py`) run inside `api/agent.py`.
   Never let memory store secrets (keep the `SECRET` filter), and keep extraction after
   `answer_done` so it never delays the reply.
+- Brand: follow the brand book in github.com/Amy-WorkspAIce/brand. `frontend/src/brand/`
+  (tokens.css, fonts) and `frontend/public/brand/` (logos) are vendored copies: don't edit them
+  here; change the brand repo and re-copy. Style with brand tokens (`--night-*`, `--ink*`,
+  `--magenta` for the one primary action, `--cyan` for anything Amy does), sharp corners,
+  no gradients, no emoji in the UI (use `src/icons.tsx`). Name: `Amy-WorkspAIce`.
 - License is AGPL-3.0; only add dependencies with compatible licenses.

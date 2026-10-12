@@ -144,7 +144,7 @@ def test_best_installed_pinned_and_requested(client):
 def test_tools_offered_only_for_installed_media(client):
     _, seen = chat(client, [[{"content": "hello"}]])
     names = {t["function"]["name"] for t in seen[0].get("tools", [])}
-    assert names == {"web_search", "fetch_url"}
+    assert names == {"web_search", "fetch_url", "get_weather"}
     install(client.app, "image", "sd15")
     install(client.app, "audio", "kokoro-82m")
     _, seen = chat(client, [[{"content": "hello"}]])

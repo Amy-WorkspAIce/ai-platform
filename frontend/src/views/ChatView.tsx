@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { AttachmentView, ImageView } from "../media";
 import { canRecord, extensionFor, useRecorder } from "../recorder";
+import { Icon } from "../icons";
 
 type Props = {
   api: Api;
@@ -266,7 +267,7 @@ export function ChatView({
         break;
       case "memory": {
         const verb = e.action === "remembered" ? "Remembered" : e.action === "updated" ? "Updated memory" : "Forgot";
-        setItems((prev) => [...prev, { kind: "notice", text: `🧠 ${verb}: ${e.text}`, memory: true }]);
+        setItems((prev) => [...prev, { kind: "notice", text: `${verb}: ${e.text}`, memory: true }]);
         break;
       }
       case "error":
@@ -416,9 +417,9 @@ export function ChatView({
         <div className="pending-attachments">
           {pendingImages.map((p) => (
             <span key={p.id} className="pending-chip">
-              🖼 {p.name}
+              <Icon name="image" /> {p.name}
               <button type="button" aria-label="Remove" onClick={() => setPendingImages((x) => x.filter((y) => y.id !== p.id))}>
-                ✕
+                <Icon name="close" size={14} />
               </button>
             </span>
           ))}
@@ -467,7 +468,7 @@ export function ChatView({
           disabled={uploading || noModels}
           onClick={() => fileInput.current?.click()}
         >
-          {uploading ? "…" : "📎"}
+          {uploading ? "…" : <Icon name="attach" size={18} label="Attach image" />}
         </button>
         {sttModel && (
           <MicButton api={api} model={sttModel} onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} onError={setError} />
@@ -514,7 +515,7 @@ export function ChatView({
       ) : items.length === 0 ? (
         <div className="welcome">
           <h1>{mode === "agent" ? "What should I build?" : "How can I help?"}</h1>
-          {folderName && <p className="muted small">New chat in 📁 {folderName}</p>}
+          {folderName && <p className="muted small">New chat in <Icon name="folder" size={14} /> {folderName}</p>}
           {noModels ? (
             <div className="welcome-card">
               <p>
@@ -540,7 +541,7 @@ export function ChatView({
                 <p key={i} className={`notice muted small ${item.memory ? "memory-note" : ""}`}>
                   {item.memory && onOpenMemory ? (
                     <button className="link" onClick={onOpenMemory} title="See what Amy remembers">
-                      {item.text}
+                      <Icon name="orbit" size={14} /> {item.text}
                     </button>
                   ) : (
                     item.text
@@ -754,7 +755,7 @@ function WorkspacePicker({
         </option>
         {workspaces?.map((w) => (
           <option key={w.name} value={w.name}>
-            📁 {w.name}
+            {w.name}
             {w.git?.branch ? ` (${w.git.branch}${w.git.changes ? `, ${w.git.changes} changed` : ""})` : ""}
           </option>
         ))}
@@ -815,7 +816,17 @@ function SpeakButton({ api, model, text }: { api: Api; model: string; text: stri
 
   return (
     <button className="icon-button" onClick={toggle} title="Read aloud" disabled={state === "loading"}>
-      {state === "loading" ? "…" : state === "playing" ? "■ Stop" : "🔊 Read aloud"}
+      {state === "loading" ? (
+        "…"
+      ) : state === "playing" ? (
+        <>
+          <Icon name="stop" size={14} /> Stop
+        </>
+      ) : (
+        <>
+          <Icon name="volume" size={14} /> Read aloud
+        </>
+      )}
     </button>
   );
 }
@@ -865,7 +876,15 @@ function MicButton({
       title={available ? (recording ? "Stop and transcribe" : "Dictate") : "Microphone access needs HTTPS (or localhost)"}
       onClick={toggle}
     >
-      {transcribing ? "…" : recording ? "● Stop" : "🎤"}
+      {transcribing ? (
+        "…"
+      ) : recording ? (
+        <>
+          <Icon name="stop" size={14} /> Stop
+        </>
+      ) : (
+        <Icon name="mic" size={18} label="Dictate" />
+      )}
     </button>
   );
 }

@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
-import { Api, type AppSettings } from "../api";
+import { Api, getPref, setPref, type AppSettings } from "../api";
 
-type Props = { api: Api; onChanged?: () => void };
+type Props = { api: Api; onChanged?: () => void; onSignOut: () => void };
 
-export function SettingsView({ api, onChanged }: Props) {
+type Theme = "dark" | "light" | "system";
+
+function applyTheme(theme: Theme) {
+  if (theme === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", theme);
+}
+
+export function SettingsView({ api, onChanged, onSignOut }: Props) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState("");
 
@@ -66,7 +73,7 @@ export function SettingsView({ api, onChanged }: Props) {
             <li key={p}>
               {p === "searxng"
                 ? settings.search.bundled_searxng
-                  ? "SearXNG (built in, private)"
+                  ? "SearXNG (built in, private; asks Bing, Yahoo, DuckDuckGo and others at once)"
                   : "SearXNG (your instance)"
                 : p === "brave"
                   ? "Brave Search API"
@@ -79,10 +86,26 @@ export function SettingsView({ api, onChanged }: Props) {
         </p>
       </section>
 
+      <Appearance />
+
+      <section className="card setting">
+        <h2>API key</h2>
+        <p className="muted small">
+          This browser remembers the API key you signed in with. Other apps and scripts use the same key to call the API
+          (see <code>/data/secrets/api_key</code>). If you change the key on the server (<code>AMY_API_KEY</code>), sign
+          out here and sign in with the new one.
+        </p>
+        <div>
+          <button className="secondary" onClick={onSignOut}>
+            Sign out of this browser
+          </button>
+        </div>
+      </section>
+
       <section className="card setting">
         <h2>About</h2>
         <p className="muted small">
-          Amy AI Platform v{settings.version} ·{" "}
+          Amy-WorkspAIce AI Platform v{settings.version} ·{" "}
           <a href="https://github.com/Amy-WorkspAIce/ai-platform" target="_blank" rel="noreferrer">
             GitHub
           </a>{" "}
@@ -93,6 +116,28 @@ export function SettingsView({ api, onChanged }: Props) {
         </p>
       </section>
     </div>
+  );
+}
+
+function Appearance() {
+  const [theme, setTheme] = useState<Theme>(() => (getPref("theme") as Theme) || "dark");
+  const choose = (t: Theme) => {
+    setTheme(t);
+    setPref("theme", t);
+    applyTheme(t);
+  };
+  return (
+    <section className="card setting">
+      <h2>Appearance</h2>
+      <div className="segmented" role="radiogroup" aria-label="Theme">
+        {(["dark", "light", "system"] as Theme[]).map((t) => (
+          <button key={t} role="radio" aria-checked={theme === t} className={theme === t ? "active" : ""} onClick={() => choose(t)}>
+            {t === "system" ? "Match system" : t[0].toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">Dark is the default. This is saved in this browser only.</p>
+    </section>
   );
 }
 

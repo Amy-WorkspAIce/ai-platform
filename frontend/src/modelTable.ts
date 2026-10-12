@@ -95,10 +95,22 @@ function compare(sort: SortKey): (a: ModelRow, b: ModelRow) => number {
   }
 }
 
-export type Filters = { category: string; query: string; sort: SortKey; runnable: boolean };
+/** Which models to show by how they fit this machine. */
+export type FitFilter = "any" | "runs" | "gpu" | "gpu_partial";
+
+const FIT_FILTERS: Record<FitFilter, Fit[] | null> = {
+  any: null,
+  runs: ["gpu", "light", "partial"],
+  gpu: ["gpu", "light"],
+  gpu_partial: ["gpu", "light", "partial"],
+};
+
+export type Filters = { category: string; query: string; sort: SortKey; reverse?: boolean; fit: FitFilter };
 
 export function filterModels(rows: ModelRow[], f: Filters): ModelRow[] {
   const q = f.query.trim().toLowerCase();
+  const fits = FIT_FILTERS[f.fit];
+  const cmp = compare(f.sort);
   return rows
     .filter((r) => f.category === "all" || r.use_cases.includes(f.category))
     .filter(
@@ -109,6 +121,6 @@ export function filterModels(rows: ModelRow[], f: Filters): ModelRow[] {
         (r.description ?? "").toLowerCase().includes(q) ||
         (r.publisher ?? "").toLowerCase().includes(q),
     )
-    .filter((r) => !f.runnable || (!r.unsupported && ["gpu", "light", "partial"].includes(r.fit)))
-    .sort(compare(f.sort));
+    .filter((r) => !fits || (!r.unsupported && fits.includes(r.fit)))
+    .sort(f.reverse ? (a, b) => cmp(b, a) : cmp);
 }

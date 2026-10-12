@@ -36,12 +36,14 @@ SECRET = re.compile(
 EXTRACT_PROMPT = """You maintain a long-term memory of durable facts about the user, so future \
 conversations can be more helpful. Review the latest exchange and decide what to remember.
 
-Remember: stable facts about the user: who they are, preferences (style, tools, formats), \
-their work and projects, people they mention, their hardware/software setup, goals, and \
-explicit requests to remember something.
+Remember: stable facts about the user: who they are, where they live (city and region \
+only, e.g. "Lives in Redmond, WA", even when it comes up during a one-off task like a weather \
+lookup), preferences (style, tools, formats, units), their work and projects, people they \
+mention, their hardware/software setup, goals, and explicit requests to remember something.
 Do NOT remember: one-off tasks or questions, things only true right now, facts about the \
 world (not the user), what the assistant said, or anything sensitive (passwords, keys, \
-tokens, account or card numbers, health or financial details unless the user asks).
+tokens, account or card numbers, street addresses, health or financial details) unless the \
+user explicitly asks you to remember it.
 
 Write each fact as one short, self-contained statement about the user, e.g. "Prefers concise \
 answers", "Runs an Unraid server with an RTX 2080 Ti", "Has a daughter named Maya".

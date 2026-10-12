@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Amy-WorkspAIce mark"><title>Amy-WorkspAIce mark</title><g transform="translate(0 0) scale(1)">
+<defs>
+<clipPath id="mk-sun"><circle cx="32" cy="32" r="17"></circle></clipPath>
+<mask id="mk-sk" maskUnits="userSpaceOnUse" x="-8" y="-8" width="80" height="80"><rect x="-8" y="-8" width="80" height="80" fill="#fff"></rect><rect x="0" y="23.4" width="64" height="1.1" fill="#000"></rect><rect x="0" y="28.8" width="64" height="1.4" fill="#000"></rect><rect x="0" y="34.0" width="64" height="1.7" fill="#000"></rect><rect x="0" y="39.4" width="64" height="2.0" fill="#000"></rect><rect x="0" y="44.8" width="64" height="2.3" fill="#000"></rect><g transform="rotate(-16 32 32)"><path d="M3 32A29 8.5 0 0 0 61 32" fill="none" stroke="#000" stroke-width="6.4"></path><circle cx="15.4" cy="38.97" r="5.9" fill="#000"></circle></g></mask>
+<mask id="mk-bk" maskUnits="userSpaceOnUse" x="-8" y="-8" width="80" height="80"><rect x="-8" y="-8" width="80" height="80" fill="#fff"></rect><circle cx="32" cy="32" r="19.25" fill="#000"></circle></mask>
+</defs>
+<g mask="url(#mk-bk)"><path transform="rotate(-16 32 32)" d="M3 32A29 8.5 0 0 1 61 32" fill="none" stroke="#22E4FF" stroke-width="3"></path></g>
+<g mask="url(#mk-sk)"><g clip-path="url(#mk-sun)">
+<rect x="0" y="15" width="64" height="8.4" fill="#FFD23F"></rect>
+<rect x="0" y="23.4" width="64" height="10.6" fill="#FF8A3D"></rect>
+<rect x="0" y="34" width="64" height="15" fill="#FF2E97"></rect>
+</g></g>
+<g transform="rotate(-16 32 32)"><path d="M3 32A29 8.5 0 0 0 61 32" fill="none" stroke="#22E4FF" stroke-width="3"></path><circle cx="15.4" cy="38.97" r="3.9" fill="#22E4FF"></circle></g>
+</g></svg>

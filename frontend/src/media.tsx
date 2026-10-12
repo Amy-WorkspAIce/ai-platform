@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Api, Attachment, VideoJob } from "./api";
+import { Icon } from "./icons";
 
 /** Fetch one auth-protected file as an object URL (released when unmounted). */
 export function useBlobUrl(fetchUrl: (() => Promise<string>) | null, key: string): string | null {
@@ -99,7 +100,7 @@ export function VideoJobView({ api, jobId }: { api: Api; jobId: string }) {
   return (
     <div className="media-progress">
       <span className="muted small">
-        🎬 {PHASES[job?.phase ?? "queued"] ?? job?.phase}
+        <Icon name="video" size={14} /> {PHASES[job?.phase ?? "queued"] ?? job?.phase}
         {job?.phase === "generating" && job.steps ? ` · step ${job.step}/${job.steps}` : ""}
         {job ? ` · ${Math.round(Date.now() / 1000 - job.started_at)}s` : ""}
       </span>

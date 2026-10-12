@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings
-from app.tools import web
+from app.tools import weather, web
 from app.tools.workspace import ToolError, Workspace
 
 
@@ -63,7 +63,29 @@ def web_tools(settings: Settings, client: httpx.AsyncClient) -> list[Tool]:
     async def fetch(args: dict) -> str:
         return await web.fetch(str(args["url"]), settings, client)
 
+    async def get_weather(args: dict) -> str:
+        try:
+            days = int(args.get("days") or 3)
+        except (TypeError, ValueError):
+            days = 3
+        try:
+            return await weather.forecast(str(args["location"]), client, days)
+        except (weather.WeatherError, httpx.HTTPError, KeyError, ValueError) as exc:
+            raise ToolError(f"Weather lookup failed: {exc}") from exc
+
     return [
+        Tool(
+            "get_weather",
+            "Current weather and the daily forecast for a place. Use this for any weather "
+            "question instead of web search.",
+            _obj(
+                ["location"],
+                location=STR | {"description": "City with region or country, e.g. 'Redmond, WA'"},
+                days=INT | {"description": "Days of forecast, 1-16 (default 3)"},
+            ),
+            get_weather,
+            summary_arg="location",
+        ),
         Tool(
             "web_search",
             "Search the web. Returns titles, URLs, snippets, and excerpts of the top pages. "

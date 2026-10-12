@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <rect width="256" height="256" rx="56" fill="#5b4bdb"/>
-  <path d="M128 52 L196 204 H168 L153 168 H103 L88 204 H60 Z M112 146 H144 L128 106 Z" fill="#fff"/>
-  <circle cx="196" cy="60" r="14" fill="#c9c2ff"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Amy-WorkspAIce app icon"><title>Amy-WorkspAIce app icon</title><defs><clipPath id="tile"><path d="M64 0H512V448L448 512H0V64Z"></path></clipPath></defs><path d="M64 0H512V448L448 512H0V64Z" fill="#120B22"></path><g clip-path="url(#tile)"><g stroke="#FF2E97" stroke-opacity=".5" stroke-width="3"><line x1="196" y1="372" x2="-200" y2="512"></line><line x1="206" y1="372" x2="-124" y2="512"></line><line x1="216" y1="372" x2="-48" y2="512"></line><line x1="226" y1="372" x2="28" y2="512"></line><line x1="236" y1="372" x2="104" y2="512"></line><line x1="246" y1="372" x2="180" y2="512"></line><line x1="256" y1="372" x2="256" y2="512"></line><line x1="266" y1="372" x2="332" y2="512"></line><line x1="276" y1="372" x2="408" y2="512"></line><line x1="286" y1="372" x2="484" y2="512"></line><line x1="296" y1="372" x2="560" y2="512"></line><line x1="306" y1="372" x2="636" y2="512"></line><line x1="316" y1="372" x2="712" y2="512"></line><line x1="0" y1="382" x2="512" y2="382"></line><line x1="0" y1="396.5" x2="512" y2="396.5"></line><line x1="0" y1="417.52" x2="512" y2="417.52"></line><line x1="0" y1="448.01" x2="512" y2="448.01"></line><line x1="0" y1="492.22" x2="512" y2="492.22"></line><line x1="0" y1="372" x2="512" y2="372"></line></g></g><g transform="translate(64 30) scale(6)">
+<defs>
+<clipPath id="ic-sun"><circle cx="32" cy="32" r="17"></circle></clipPath>
+<mask id="ic-sk" maskUnits="userSpaceOnUse" x="-8" y="-8" width="80" height="80"><rect x="-8" y="-8" width="80" height="80" fill="#fff"></rect><rect x="0" y="23.4" width="64" height="1.1" fill="#000"></rect><rect x="0" y="28.8" width="64" height="1.4" fill="#000"></rect><rect x="0" y="34.0" width="64" height="1.7" fill="#000"></rect><rect x="0" y="39.4" width="64" height="2.0" fill="#000"></rect><rect x="0" y="44.8" width="64" height="2.3" fill="#000"></rect><g transform="rotate(-16 32 32)"><path d="M3 32A29 8.5 0 0 0 61 32" fill="none" stroke="#000" stroke-width="6.4"></path><circle cx="15.4" cy="38.97" r="5.9" fill="#000"></circle></g></mask>
+<mask id="ic-bk" maskUnits="userSpaceOnUse" x="-8" y="-8" width="80" height="80"><rect x="-8" y="-8" width="80" height="80" fill="#fff"></rect><circle cx="32" cy="32" r="19.25" fill="#000"></circle></mask>
+</defs>
+<g mask="url(#ic-bk)"><path transform="rotate(-16 32 32)" d="M3 32A29 8.5 0 0 1 61 32" fill="none" stroke="#22E4FF" stroke-width="3"></path></g>
+<g mask="url(#ic-sk)"><g clip-path="url(#ic-sun)">
+<rect x="0" y="15" width="64" height="8.4" fill="#FFD23F"></rect>
+<rect x="0" y="23.4" width="64" height="10.6" fill="#FF8A3D"></rect>
+<rect x="0" y="34" width="64" height="15" fill="#FF2E97"></rect>
+</g></g>
+<g transform="rotate(-16 32 32)"><path d="M3 32A29 8.5 0 0 0 61 32" fill="none" stroke="#22E4FF" stroke-width="3"></path><circle cx="15.4" cy="38.97" r="3.9" fill="#22E4FF"></circle></g>
+</g><g fill="none" stroke="#22E4FF" stroke-width="8"><path d="M436 32H480V76"></path><path d="M32 436V480H76"></path></g><path d="M64 0H512V448L448 512H0V64Z" fill="none" stroke="#3B2A63" stroke-width="4"></path></svg>

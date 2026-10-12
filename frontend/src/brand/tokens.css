@@ -1,0 +1,128 @@
+/* Amy-WorkspAIce design tokens: generated from tokens/tokens.json by scripts/build_css.py. Do not edit. */
+
+:root {
+  color-scheme: dark;
+  --font-display: "Audiowide", "Chakra Petch", system-ui, sans-serif;
+  --font-sans: "Chakra Petch", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-0: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --cut-sm: 6px;
+  --cut-md: 12px;
+  --cut-lg: 24px;
+  --type-display-xl: 400 56px/60px var(--font-display);
+  --type-display-xl-tracking: 0.01em;
+  --type-display: 400 32px/38px var(--font-display);
+  --type-h1: 600 26px/32px var(--font-sans);
+  --type-h2: 600 19px/26px var(--font-sans);
+  --type-body: 400 15px/24px var(--font-sans);
+  --type-body-strong: 600 15px/24px var(--font-sans);
+  --type-label: 600 12px/16px var(--font-sans);
+  --type-label-tracking: 0.12em;
+  --type-code: 400 13px/20px var(--font-mono);
+  --type-readout: 500 12px/16px var(--font-mono);
+  --type-readout-tracking: 0.08em;
+  --night-000: #0A0612;
+  --night-100: #120B22;
+  --night-200: #1C1233;
+  --night-300: #2A1C4A;
+  --line: #3B2A63;
+  --line-strong: #6E5BA3;
+  --ink: #F5F0FF;
+  --ink-muted: #B9ABDB;
+  --ink-faint: #8E7DBA;
+  --magenta: #FF2E97;
+  --on-magenta: #12061F;
+  --magenta-soft: #3A0E2C;
+  --cyan: #22E4FF;
+  --on-cyan: #04121A;
+  --cyan-soft: #082C3A;
+  --sunset: #FF8A3D;
+  --solar: #FFD23F;
+  --on-solar: #1A1200;
+  --success: #3DFFA2;
+  --warning: var(--solar);
+  --danger: #FF5545;
+  --link: var(--cyan);
+  --focus: var(--cyan);
+  --focus-ring: 0 0 0 2px #0a0612, 0 0 0 4px #22e4ff;
+  --glow-cyan: 0 0 0 1px #22e4ff, 0 0 18px #22e4ff59;
+  --glow-magenta: 0 0 0 1px #ff2e97, 0 0 18px #ff2e9759;
+  --shadow-pop: 0 12px 32px #000000b3;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --night-000: #FBF8FF;
+  --night-100: #FFFFFF;
+  --night-200: #F2ECFB;
+  --night-300: #E6DCF7;
+  --line: #D3C5EC;
+  --line-strong: #8F7DB5;
+  --ink: #170C2B;
+  --ink-muted: #4E3F70;
+  --ink-faint: #6B5B8E;
+  --magenta: #C2006A;
+  --on-magenta: #FFFFFF;
+  --magenta-soft: #FFE0EF;
+  --cyan: #006A80;
+  --on-cyan: #FFFFFF;
+  --cyan-soft: #DDF7FC;
+  --sunset: #A84500;
+  --solar: #8C5B00;
+  --on-solar: #FFFFFF;
+  --success: #007542;
+  --warning: var(--solar);
+  --danger: #C4122F;
+  --link: var(--cyan);
+  --focus: var(--cyan);
+  --focus-ring: 0 0 0 2px #fbf8ff, 0 0 0 4px #006a80;
+  --glow-cyan: 0 0 0 1px #006a80;
+  --glow-magenta: 0 0 0 1px #c2006a;
+  --shadow-pop: 0 12px 32px #170c2b29;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --night-000: #FBF8FF;
+    --night-100: #FFFFFF;
+    --night-200: #F2ECFB;
+    --night-300: #E6DCF7;
+    --line: #D3C5EC;
+    --line-strong: #8F7DB5;
+    --ink: #170C2B;
+    --ink-muted: #4E3F70;
+    --ink-faint: #6B5B8E;
+    --magenta: #C2006A;
+    --on-magenta: #FFFFFF;
+    --magenta-soft: #FFE0EF;
+    --cyan: #006A80;
+    --on-cyan: #FFFFFF;
+    --cyan-soft: #DDF7FC;
+    --sunset: #A84500;
+    --solar: #8C5B00;
+    --on-solar: #FFFFFF;
+    --success: #007542;
+    --warning: var(--solar);
+    --danger: #C4122F;
+    --link: var(--cyan);
+    --focus: var(--cyan);
+    --focus-ring: 0 0 0 2px #fbf8ff, 0 0 0 4px #006a80;
+    --glow-cyan: 0 0 0 1px #006a80;
+    --glow-magenta: 0 0 0 1px #c2006a;
+    --shadow-pop: 0 12px 32px #170c2b29;
+  }
+}
+
+/* The clipped corner: cut the top-left and bottom-right corners of filled shapes. */
+.cut-sm { clip-path: polygon(var(--cut-sm) 0, 100% 0, 100% calc(100% - var(--cut-sm)), calc(100% - var(--cut-sm)) 100%, 0 100%, 0 var(--cut-sm)); }
+.cut-md { clip-path: polygon(var(--cut-md) 0, 100% 0, 100% calc(100% - var(--cut-md)), calc(100% - var(--cut-md)) 100%, 0 100%, 0 var(--cut-md)); }

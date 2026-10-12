@@ -8,7 +8,7 @@ for example "read this spreadsheet range" or "create a task".
 
 ## Contract
 
-Each Amy WorkspAIce app (and any third-party service) that wants to be usable by
+Each Amy-WorkspAIce app (and any third-party service) that wants to be usable by
 the AI exposes an **MCP server** ([Model Context Protocol](https://modelcontextprotocol.io))
 over Streamable HTTP, for example at `https://<app>/mcp`.
 

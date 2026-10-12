@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Amy-WorkspAIce/ai-platform/issues</Support>
   <Project>https://github.com/Amy-WorkspAIce/ai-platform</Project>
-  <Overview>Amy AI Platform: a self-hosted, customizable AI platform. Runs local models on your NVIDIA GPU (bundled Ollama), exposes an OpenAI-compatible API for your other apps, and includes a web chat UI. Part of the open-source Amy WorkspAIce suite.&#xD;
+  <Overview>Amy-WorkspAIce AI Platform: a self-hosted, customizable AI platform. Runs local models on your NVIDIA GPU (bundled Ollama), exposes an OpenAI-compatible API for your other apps, and includes a web chat UI. Part of the open-source Amy-WorkspAIce suite.&#xD;
 &#xD;
 GPU: requires the "Nvidia Driver" plugin. Without a GPU, remove "--runtime=nvidia" from Extra Parameters.&#xD;
 API key: printed in the container log on first start and saved to appdata/secrets/api_key.</Overview>

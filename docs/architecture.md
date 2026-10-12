@@ -2,7 +2,7 @@
 
 ## Role in the suite
 
-Amy WorkspAIce is a set of independent apps, one repo and one container each.
+Amy-WorkspAIce is a set of independent apps, one repo and one container each.
 The AI Platform is the **AI service** of the suite:
 
 ```

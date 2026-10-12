@@ -1,9 +1,11 @@
-# Amy AI Platform
+<img src="docs/brand/amy-workspaice-banner-github.svg" alt="Amy-WorkspAIce: the digital workspace of the future" width="100%">
+
+# Amy-WorkspAIce AI Platform
 
 A self-hosted, customizable AI platform. It runs models on your own GPU, serves
 them through an **OpenAI-compatible API**, and includes a web chat UI.
 
-It is the first app of **[Amy WorkspAIce](https://github.com/Amy-WorkspAIce)**, an
+It is the first app of **[Amy-WorkspAIce](https://github.com/Amy-WorkspAIce)**, an
 open-source workplace suite (documents, spreadsheets, tasks, notes, code, chat, ...).
 Each app is its own container. The AI Platform is the AI service your other apps
 call, and it can act on those apps through their APIs.
@@ -28,7 +30,8 @@ call, and it can act on those apps through their APIs.
   each rated for your GPU ("Runs on GPU", "Partial GPU", "Too large"). Sort by
   **Perfect match**: the most capable models that still run well on your machine. Curated
   picks per use case sit on top; one click installs anything, including the engine it needs.
-  Gated models work with your Hugging Face token (Settings).
+  Gated models work with your Hugging Face token (Settings). Click a column to sort, filter to
+  models that fit on your GPU, and manage what's installed on the **Installed** tab.
 - **ChatGPT-style chat** with saved conversations in collapsible folders (drag and drop),
   streaming, markdown, collapsible "thinking" for reasoning models, dictation and read-aloud.
 - **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …") and
@@ -38,6 +41,7 @@ call, and it can act on those apps through their APIs.
   automatically when a conversation outgrows the model's context window.
 - **Web access**: the model can search the web through a built-in, private SearXNG
   (no setup; Brave or your own SearXNG optional) and read pages, citing its sources.
+  Weather questions use [Open-Meteo](https://open-meteo.com) directly (free, no key).
 - **Agent mode**: describe a feature and Amy works on it in a workspace (an empty folder
   or a cloned git repo). It reads code, edits files and runs tests and builds, asking your
   approval before each change or command.
@@ -119,12 +123,13 @@ print(reply.choices[0].message.content)
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)
 - [x] Chat as the single interface: delegates images, edits, video and speech to specialist models; Library for results
 - [x] Chat folders, long-term memory (Memory page), automatic context management
+- [x] Brand identity (dark-first theme, Orbit logo), Installed models tab, sortable model table with GPU-fit filter, weather tool
 - [ ] Image-to-video
 - [ ] Sandbox container for agent commands
 - [ ] Provider management in the UI
 - [ ] Multiple API keys and users
 - [ ] Customization: personas/system prompts, themes, plugins
-- [ ] Connectors: use other Amy WorkspAIce apps (and any MCP server) as tools
+- [ ] Connectors: use other Amy-WorkspAIce apps (and any MCP server) as tools
 - [ ] Embeddings API, RAG
 
 ## Contributing

@@ -41,6 +41,8 @@ Answer simple questions directly. Use markdown when it helps readability."""
 WEB_PROMPT = """You have web access in this chat:
 - web_search searches the web and includes excerpts from the top pages.
 - fetch_url reads one page in full.
+- get_weather gives current weather and the forecast for a place (use it for any weather \
+question; a city and state or country is enough, never ask for more).
 Use them for live or recent information instead of guessing, then answer from what you found \
 and cite the pages as markdown links. Prefer official sources; if sources disagree, say so.
 If a tool fails, don't keep retrying it. Try one other approach (e.g. fetch_url on a site you \

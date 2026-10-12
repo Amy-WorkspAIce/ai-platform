@@ -7,6 +7,21 @@ use_default_settings:
       - ahmia
       - torch
 
+# SearXNG's defaults enable only three web engines (Brave, DuckDuckGo, Google CSE), and
+# Brave and DuckDuckGo often throttle or CAPTCHA a home server. Turn on more engines so
+# search keeps working when some of them block us. (Google direct and Qwant also block.)
+engines:
+  - name: bing
+    disabled: false
+  - name: yahoo
+    disabled: false
+  - name: yep
+    disabled: false
+  - name: duckduckgo web
+    disabled: false
+  - name: mwmbl
+    disabled: false
+
 general:
   instance_name: "Amy search"
   enable_metrics: false

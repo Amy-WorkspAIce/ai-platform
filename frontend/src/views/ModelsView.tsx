@@ -11,7 +11,8 @@ import {
   type PullState,
   type SortKey,
 } from "../api";
-import { ago, downloads, filterModels, loadModelTable } from "../modelTable";
+import { ago, downloads, filterModels, loadModelTable, type FitFilter } from "../modelTable";
+import { Icon } from "../icons";
 
 type Props = {
   api: Api;
@@ -29,14 +30,30 @@ const FIT_LABEL: Record<Fit, string> = {
   unknown: "Unknown fit",
 };
 
-const SORTS: { id: SortKey; label: string; hint: string }[] = [
-  { id: "perfect", label: "Perfect match", hint: "The most capable models that still run well on your hardware, first." },
-  { id: "fit", label: "Best fit", hint: "Most headroom first." },
-  { id: "popular", label: "Most downloaded", hint: "" },
-  { id: "size_desc", label: "Largest first", hint: "" },
-  { id: "size_asc", label: "Smallest first", hint: "" },
-  { id: "name", label: "Name", hint: "" },
-];
+/** Sortable columns. The first click uses the natural order; the next click reverses it. */
+type Column = "perfect" | "name" | "size" | "fit" | "downloads";
+type Sort = { column: Column; reverse: boolean };
+
+const COLUMN_SORT: Record<Column, { key: SortKey; label: string; order: [string, string] }> = {
+  perfect: { key: "perfect", label: "Perfect match", order: ["best picks first", "best picks last"] },
+  name: { key: "name", label: "Name", order: ["A to Z", "Z to A"] },
+  size: { key: "size_desc", label: "Size", order: ["largest first", "smallest first"] },
+  fit: { key: "fit", label: "Fit", order: ["most headroom first", "least headroom first"] },
+  downloads: { key: "popular", label: "Downloads", order: ["most first", "fewest first"] },
+};
+
+const FIT_FILTER_LABEL: Record<FitFilter, string> = {
+  any: "Any fit",
+  runs: "Runs on this machine",
+  gpu: "Fits on GPU",
+  gpu_partial: "Fits on GPU or partially",
+};
+
+function sortParams(sort: Sort): { sort: SortKey; reverse: boolean } {
+  // Size reverses to its own ascending order so models with unknown size stay last.
+  if (sort.column === "size") return { sort: sort.reverse ? "size_asc" : "size_desc", reverse: false };
+  return { sort: COLUMN_SORT[sort.column].key, reverse: sort.reverse };
+}
 
 const SOURCE_LABEL = { curated: "Recommended", ollama: "Ollama", huggingface: "Hugging Face" } as const;
 const PAGE = 50;
@@ -58,6 +75,7 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
   const [pulls, setPulls] = useState<Record<string, PullState>>({});
   const [error, setError] = useState("");
   const [tableVersion, setTableVersion] = useState(0);
+  const [tab, setTab] = useState<"discover" | "installed">("discover");
   const seenDone = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
@@ -157,6 +175,19 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
 
       <ActivePulls pulls={Object.values(pulls)} />
 
+      <div className="segmented library-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === "discover"} className={tab === "discover" ? "active" : ""} onClick={() => setTab("discover")}>
+          Discover
+        </button>
+        <button role="tab" aria-selected={tab === "installed"} className={tab === "installed" ? "active" : ""} onClick={() => setTab("installed")}>
+          Installed
+        </button>
+      </div>
+
+      {tab === "installed" ? (
+        <InstalledModels api={api} useCases={catalog.use_cases} extra={extraInstalled} actions={actions} version={tableVersion} />
+      ) : (
+      <>
       <section>
         <h2>Recommended for your hardware</h2>
         <div className="rec-grid">
@@ -197,28 +228,9 @@ export function ModelsView({ api, onModelsChanged, onUseModel, onOpenSettings }:
       <section>
         <h2>Install by name</h2>
         <CustomPull onInstall={(tag) => install({ tag, engine: "ollama", use_cases: ["chat"] })} />
-        {extraInstalled.length > 0 && (
-          <>
-            <h3>Other installed models</h3>
-            <div className="card">
-              {extraInstalled.map((m) => (
-                <div key={m.name} className="installed-row">
-                  <span className="mono">{m.name}</span>
-                  <span className="muted small">{[m.parameters, m.quantization, `${m.size_gb} GB`].filter(Boolean).join(" · ")}</span>
-                  <span className="row-actions">
-                    <button className="secondary" onClick={() => use({ tag: m.name, engine: "ollama", use_cases: ["chat"] })}>
-                      Use
-                    </button>
-                    <button className="link danger" onClick={() => remove(m.name)}>
-                      Delete
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
       </section>
+      </>
+      )}
     </div>
   );
 }
@@ -237,9 +249,9 @@ function AllModels({
   const [rows, setRows] = useState<ModelRow[] | null>(null);
   const [extra, setExtra] = useState<ModelRow[]>([]);
   const [category, setCategory] = useState("all");
-  const [sort, setSort] = useState<SortKey>("perfect");
+  const [sort, setSort] = useState<Sort>({ column: "perfect", reverse: false });
   const [query, setQuery] = useState("");
-  const [runnable, setRunnable] = useState(false);
+  const [fit, setFit] = useState<FitFilter>("any");
   const [shown, setShown] = useState(PAGE);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState("");
@@ -255,14 +267,16 @@ function AllModels({
     };
   }, [api, version]);
 
-  useEffect(() => setShown(PAGE), [category, sort, query, runnable]);
+  useEffect(() => setShown(PAGE), [category, sort, query, fit]);
 
   const all = useMemo(() => {
     if (!rows) return [];
     const tags = new Set(rows.map((r) => r.tag));
     return [...rows, ...extra.filter((r) => !tags.has(r.tag))];
   }, [rows, extra]);
-  const filtered = useMemo(() => filterModels(all, { category, query, sort, runnable }), [all, category, query, sort, runnable]);
+  const filtered = useMemo(() => filterModels(all, { category, query, fit, ...sortParams(sort) }), [all, category, query, sort, fit]);
+  const sortBy = (column: Column) =>
+    setSort((s) => (s.column === column ? { column, reverse: !s.reverse } : { column, reverse: false }));
 
   async function searchHub() {
     const q = query.trim();
@@ -282,8 +296,8 @@ function AllModels({
     }
   }
 
-  const sortHint = SORTS.find((s) => s.id === sort)?.hint;
   const q = query.trim();
+  const sortInfo = COLUMN_SORT[sort.column];
 
   return (
     <section>
@@ -291,19 +305,29 @@ function AllModels({
       <p className="muted small">The whole Ollama library plus image, video and speech models from Hugging Face, rated for your hardware.</p>
       <div className="browse-controls">
         <input className="browse-search" type="search" placeholder="Search models…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
-          {SORTS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
+        <select value={fit} onChange={(e) => setFit(e.target.value as FitFilter)} aria-label="Filter by fit">
+          {(Object.keys(FIT_FILTER_LABEL) as FitFilter[]).map((f) => (
+            <option key={f} value={f}>
+              {FIT_FILTER_LABEL[f]}
             </option>
           ))}
         </select>
-        <label className="auto-approve">
-          <input type="checkbox" checked={runnable} onChange={(e) => setRunnable(e.target.checked)} />
-          Only models that run here
-        </label>
       </div>
-      {sortHint && <p className="muted small sort-hint">{sortHint}</p>}
+      <p className="muted small sort-hint">
+        {sort.column === "perfect" ? (
+          <>
+            Sorted by <strong>Perfect match</strong>: the most capable models that still run well on your hardware
+            {sort.reverse ? ", reversed" : ""}. Click a column title to sort by it.
+          </>
+        ) : (
+          <>
+            Sorted by <strong>{sortInfo.label}</strong>, {sortInfo.order[sort.reverse ? 1 : 0]}.{" "}
+            <button className="link small" onClick={() => setSort({ column: "perfect", reverse: false })}>
+              Back to Perfect match
+            </button>
+          </>
+        )}
+      </p>
       <div className="chips">
         <button className={category === "all" ? "chip active" : "chip"} onClick={() => setCategory("all")}>
           All
@@ -322,11 +346,11 @@ function AllModels({
           <p className="muted small">{filtered.length.toLocaleString()} models</p>
           <div className="model-table" role="table">
             <div className="model-row head" role="row">
-              <span>Model</span>
-              <span>Size</span>
-              <span>Fit</span>
-              <span>Downloads</span>
-              <span />
+              <SortHeader column="name" sort={sort} onSort={sortBy} label="Model" />
+              <SortHeader column="size" sort={sort} onSort={sortBy} label="Size" />
+              <SortHeader column="fit" sort={sort} onSort={sortBy} label="Fit" />
+              <SortHeader column="downloads" sort={sort} onSort={sortBy} label="Downloads" />
+              <SortHeader column="perfect" sort={sort} onSort={sortBy} label="Match" />
             </div>
             {filtered.slice(0, shown).map((r) => (
               <Row key={r.tag} row={r} useCases={useCases} {...actions} />
@@ -369,7 +393,7 @@ function Row({ row: r, useCases, ...actions }: { row: ModelRow; useCases: Catalo
           )}
           {r.url && (
             <a className="small" href={r.url} target="_blank" rel="noreferrer" title="Open model page">
-              ↗
+              <Icon name="external" size={14} label="Open model page" />
             </a>
           )}
         </div>
@@ -446,7 +470,7 @@ function Action({ row: r, install, remove, use, pulls, onOpenSettings }: { row: 
   return (
     <span className="row-actions">
       <button
-        className={risky ? "secondary" : "primary"}
+        className={risky ? "secondary risky" : "secondary"}
         title={!r.disk_ok ? "Not enough free disk space" : undefined}
         onClick={() => {
           if (risky && !confirm(`${r.tag} probably won't run well on this machine${r.disk_ok ? "" : " and may not fit on disk"}. Download anyway?`)) return;
@@ -456,6 +480,139 @@ function Action({ row: r, install, remove, use, pulls, onOpenSettings }: { row: 
         Install
       </button>
     </span>
+  );
+}
+
+function SortHeader({ column, label, sort, onSort }: { column: Column; label: string; sort: Sort; onSort: (c: Column) => void }) {
+  const active = sort.column === column;
+  return (
+    <button
+      role="columnheader"
+      className={`sort-header ${active ? "active" : ""}`}
+      aria-sort={active ? (sort.reverse ? "descending" : "ascending") : "none"}
+      title={`Sort by ${COLUMN_SORT[column].label.toLowerCase()} (${COLUMN_SORT[column].order[active && !sort.reverse ? 1 : 0]})`}
+      onClick={() => onSort(column)}
+    >
+      {label}
+      <span className="sort-arrow" aria-hidden>
+        {active ? (sort.reverse ? "\u25B4" : "\u25BE") : ""}
+      </span>
+    </button>
+  );
+}
+
+/** Everything installed, with what it's used for, its size and fit, and actions. */
+function InstalledModels({
+  api,
+  useCases,
+  extra,
+  actions,
+  version,
+}: {
+  api: Api;
+  useCases: Catalog["use_cases"];
+  extra: InstalledModel[];
+  actions: Actions;
+  version: number;
+}) {
+  const [rows, setRows] = useState<ModelRow[] | null>(null);
+  const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    loadModelTable(api)
+      .then((t) => !cancelled && setRows(t.models.filter((r) => r.installed)))
+      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
+    api
+      .settings()
+      .then((s) => {
+        if (cancelled) return;
+        const used: Record<string, string> = {};
+        for (const [cap, choice] of Object.entries(s.models)) {
+          const id = choice.pinned ?? choice.best;
+          if (id) used[id] = [used[id], cap].filter(Boolean).join(", ");
+        }
+        setDefaults(used);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [api, version]);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!rows) return <p className="muted">Loading…</p>;
+
+  const names = Object.fromEntries(useCases.map((u) => [u.id, u.id === "chat" ? "Chat" : u.name]));
+  const total = rows.reduce((n, r) => n + (r.size_gb ?? 0), 0) + extra.reduce((n, m) => n + m.size_gb, 0);
+  const count = rows.length + extra.length;
+
+  return (
+    <section>
+      <p className="muted small">
+        {count} model{count === 1 ? "" : "s"} installed, about {Math.round(total * 10) / 10} GB on disk. Chat hands images,
+        video and speech to the best installed model for each (or the one you pick in Settings).
+      </p>
+      {count === 0 ? (
+        <p className="muted">Nothing installed yet. Find models under Discover.</p>
+      ) : (
+        <div className="model-table installed-table" role="table">
+          <div className="model-row head" role="row">
+            <span>Model</span>
+            <span>Size</span>
+            <span>Fit</span>
+            <span>Used for</span>
+            <span />
+          </div>
+          {rows.map((r) => {
+            const used = defaults[`${r.engine}/${r.tag}`];
+            return (
+              <div key={r.tag} className="model-row" role="row">
+                <div className="model-cell-main">
+                  <div className="model-name">
+                    <strong>{r.name}</strong>
+                    {r.params && <span className="model-params">{r.params}</span>}
+                  </div>
+                  <div className="model-meta muted small">
+                    <span className="mono">{r.tag}</span> · {r.use_cases.map((u) => names[u] ?? u).join(" · ")}
+                  </div>
+                </div>
+                <span className="muted small cell-size">{r.size_gb != null ? `${r.size_gb} GB` : "?"}</span>
+                <span className="cell-fit">
+                  <span className={`fit fit-${r.fit}`}>{FIT_LABEL[r.fit]}</span>
+                </span>
+                <span className="small cell-downloads">
+                  {used ? <span className="tag source-curated">Default: {used}</span> : <span className="muted">–</span>}
+                </span>
+                <Action row={r} {...actions} />
+              </div>
+            );
+          })}
+          {extra.map((m) => (
+            <div key={m.name} className="model-row" role="row">
+              <div className="model-cell-main">
+                <div className="model-name">
+                  <strong className="mono">{m.name}</strong>
+                </div>
+                <div className="model-meta muted small">{[m.parameters, m.quantization, "Installed by name"].filter(Boolean).join(" · ")}</div>
+              </div>
+              <span className="muted small cell-size">{m.size_gb} GB</span>
+              <span className="cell-fit" />
+              <span className="muted small cell-downloads">–</span>
+              <span className="row-actions">
+                <button className="secondary" onClick={() => actions.use({ tag: m.name, engine: "ollama", use_cases: ["chat"] })}>
+                  Chat
+                </button>
+                <button className="link danger" onClick={() => actions.remove(m.name)}>
+                  Delete
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -523,7 +680,7 @@ function CustomPull({ onInstall }: { onInstall: (tag: string) => void }) {
       }}
     >
       <input value={value} placeholder="e.g. llama3.2:3b or hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M" onChange={(e) => setValue(e.target.value)} />
-      <button type="submit" className="primary" disabled={!value.trim()}>
+      <button type="submit" className="secondary" disabled={!value.trim()}>
         Install
       </button>
       <p className="muted small full">

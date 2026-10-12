@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Api, Conversation, Folder } from "./api";
+import { Icon } from "./icons";
 
 type Props = {
   api: Api;
@@ -112,14 +113,14 @@ export function ChatList({ api, conversations, folders, activeId, onOpen, onNewC
         <span className="history-actions">
           {folders.length > 0 && (
             <button aria-label="Move to folder" title="Move to folder" onClick={() => setMoving(c.id)}>
-              ⇄
+              <Icon name="move" size={14} />
             </button>
           )}
           <button aria-label="Rename" title="Rename" onClick={() => void renameChat(c)}>
-            ✎
+            <Icon name="edit" size={14} />
           </button>
           <button aria-label="Delete" title="Delete" onClick={() => void deleteChat(c)}>
-            ✕
+            <Icon name="close" size={14} />
           </button>
         </span>
       </div>
@@ -156,10 +157,10 @@ export function ChatList({ api, conversations, folders, activeId, onOpen, onNewC
                   +
                 </button>
                 <button aria-label="Rename folder" title="Rename" onClick={() => void renameFolder(f)}>
-                  ✎
+                  <Icon name="edit" size={14} />
                 </button>
                 <button aria-label="Delete folder" title="Delete folder (keeps chats)" onClick={() => void deleteFolder(f)}>
-                  ✕
+                  <Icon name="close" size={14} />
                 </button>
               </span>
             </div>

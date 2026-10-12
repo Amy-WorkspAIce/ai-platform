@@ -23,27 +23,30 @@ installed** for your hardware (Perfect-match ranking). Asking for one by name ("
 works too. Before a media job the chat model is unloaded from the GPU, and a fully-on-GPU
 image pipeline is moved back to RAM afterwards, so the two take turns on the card.
 
-Attach files with 📎: images become part of your message (so the model can edit them), audio
+Attach files with the paperclip: images become part of your message (so the model can edit them), audio
 files are transcribed into it.
 
 Models that can't call tools still chat normally; Amy notices and retries without tools.
 
 ## Web access
 
-On by default (**Settings → Web access**). The model gets two tools and uses them when a
+On by default (**Settings → Web access**). The model gets three tools and uses them when a
 question needs current information:
 
 | Tool | What it does |
 |---|---|
 | `web_search` | Searches, then reads the top 3 results and includes excerpts, so answers come from page content rather than stale snippets. |
 | `fetch_url` | Reads a page (or PDF) in full and returns its main text. |
+| `get_weather` | Current conditions and a daily forecast from [Open-Meteo](https://open-meteo.com) (free, no key). Takes "City, ST" or "City, Country"; street addresses work too (only the city is used). Units follow the country (°F in the US). |
 
 ### Search providers
 
 The **full image bundles SearXNG**, a private meta-search engine that runs inside the
 container on `127.0.0.1:8888`. Nothing to set up. It queries several engines at once
-(Google, Bing, DuckDuckGo, Brave, Wikipedia, ...) and keeps working when one of them
-throttles your server, which a single-engine scraper can't do.
+(Bing, Yahoo, DuckDuckGo, Brave, Yep, Mwmbl, Google CSE, Wikipedia) and keeps working when
+some of them throttle your server, which a single-engine scraper can't do. Brave and
+DuckDuckGo commonly rate-limit or CAPTCHA home servers, so SearXNG's defaults (only three web
+engines) aren't enough; the bundled config (`docker/searxng.yml`) turns on the others.
 
 | Provider | Setup | Notes |
 |---|---|---|

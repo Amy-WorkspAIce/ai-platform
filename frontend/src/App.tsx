@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Api, AuthError, getApiKey, setApiKey, type Conversation, type Folder, type ModelInfo } from "./api";
 import { ChatList } from "./ChatList";
+import { Icon } from "./icons";
 import { loadModelTable } from "./modelTable";
 import { ChatView } from "./views/ChatView";
 import { LibraryView } from "./views/LibraryView";
@@ -104,7 +105,12 @@ export function App() {
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <div className="brand">
-          <span className="logo">A</span> Amy
+          <Logo />
+          {version && (
+            <span className="version" title={`AI Platform ${version}`}>
+              v{version}
+            </span>
+          )}
         </div>
         <button className="new-chat" onClick={() => openChat(null)}>
           + New chat
@@ -127,17 +133,11 @@ export function App() {
           onDeleted={(id) => chat.id === id && openChat(null)}
           onError={handleError}
         />
-        <div className="sidebar-footer">
-          <button className="link" onClick={logout}>
-            Change API key
-          </button>
-          {version && <span className="version">v{version}</span>}
-        </div>
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
       <div className="main">
         <button className="menu-toggle" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
-          ☰
+          <Icon name="menu" size={20} />
         </button>
         {error && (
           <p className="error banner" onClick={() => setError("")}>
@@ -164,7 +164,7 @@ export function App() {
         )}
         {view === "library" && <LibraryView api={api} onNewChat={() => openChat(null)} />}
         {view === "memory" && <MemoryView api={api} onOpenChat={(id) => openChat(id)} />}
-        {view === "settings" && <SettingsView api={api} />}
+        {view === "settings" && <SettingsView api={api} onSignOut={logout} />}
         {view === "models" && (
           <ModelsView
             api={api}
@@ -189,7 +189,8 @@ function KeyPrompt({ error, onSubmit }: { error: string; onSubmit: (key: string)
       }}
     >
       <div className="brand big">
-        <span className="logo">A</span> Amy
+        <Logo />
+        <p className="readout">AI Platform</p>
       </div>
       <p className="muted">
         Enter your API key. On first start it is printed in the container logs and saved to{" "}
@@ -207,5 +208,15 @@ function KeyPrompt({ error, onSubmit }: { error: string; onSubmit: (key: string)
       </button>
       {error && <p className="error">{error}</p>}
     </form>
+  );
+}
+
+/** The brand lockup; the light-ground version shows in the light theme. */
+function Logo() {
+  return (
+    <>
+      <img className="brand-logo on-dark" src="/brand/amy-workspaice-lockup.svg" alt="Amy-WorkspAIce" />
+      <img className="brand-logo on-light" src="/brand/amy-workspaice-lockup-light.svg" alt="Amy-WorkspAIce" />
+    </>
   );
 }
