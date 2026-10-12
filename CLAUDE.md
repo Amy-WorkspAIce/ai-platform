@@ -27,7 +27,7 @@ plus web UI) packaged as a single container, Unraid-first but portable.
 - Memory (`app/memory.py`) and context fitting (`app/context.py`) run inside `api/agent.py`.
   Never let memory store secrets (keep the `SECRET` filter), and keep extraction after
   `answer_done` so it never delays the reply.
-- Brand: follow the brand book in github.com/Amy-WorkspAIce/brand. `frontend/src/brand/`
+- Brand: follow the brand book in https://github.com/Amy-WorkspAIce/brand. `frontend/src/brand/`
   (tokens.css, fonts) and `frontend/public/brand/` (logos) are vendored copies: don't edit them
   here; change the brand repo and re-copy. Style with brand tokens (`--night-*`, `--ink*`,
   `--magenta` for the one primary action, `--cyan` for anything Amy does), sharp corners,

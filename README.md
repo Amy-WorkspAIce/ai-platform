@@ -5,7 +5,7 @@
 A self-hosted, customizable AI platform. It runs models on your own GPU, serves
 them through an **OpenAI-compatible API**, and includes a web chat UI.
 
-It is the first app of **[Amy-WorkspAIce](https://github.com/Amy-WorkspAIce)**, an
+It is the first app of **[Amy-WorkspAIce](https://github.com/Amy-WorkspAIce)** ([brand](https://github.com/Amy-WorkspAIce/brand)), an
 open-source workplace suite (documents, spreadsheets, tasks, notes, code, chat, ...).
 Each app is its own container. The AI Platform is the AI service your other apps
 call, and it can act on those apps through their APIs.
