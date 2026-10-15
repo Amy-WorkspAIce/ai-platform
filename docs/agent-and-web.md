@@ -86,7 +86,8 @@ The approval card shows what will happen (the command, or the file content or di
 
 - Commands run in a fresh, non-interactive `bash` in the workspace, with a 10-minute limit
   (`AMY_AGENT_COMMAND_TIMEOUT`).
-- Tools available: `git`, `python3`, `node`/`npm`/`npx`, `ripgrep`, `curl`, `wget`, `jq`,
+- Tools available: `git`, `gh` (GitHub CLI, signed in automatically with `AMY_GITHUB_TOKEN`),
+  `python3`, `node`/`npm`/`npx`, `ripgrep`, `curl`, `wget`, `jq`,
   `unzip`, `make`, `gcc`/`g++`. Internet access works.
 - Commands run as the container's unprivileged user (`PUID`), **not root**: `sudo` and
   `apt-get` can't install system packages. The agent installs what it needs at user level:
