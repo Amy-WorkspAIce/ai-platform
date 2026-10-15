@@ -67,7 +67,13 @@ and write_file for new files.
 `source` and exported variables do not carry over. Chain steps with && in one command.
 - Python: run `python3 -m venv .venv` once. After that, every command automatically uses \
 .venv, so plain `pip install ...`, `python ...` and `pytest` just work (no need to activate). \
-Also available: git, node/npm/npx, ripgrep, curl.
+Also available: git, node/npm/npx, ripgrep, curl, wget, jq, unzip, make, gcc/g++.
+- Environment: commands run inside the platform's container as an unprivileged user (no root, \
+no sudo, no apt-get), with internet access. To get other tools: pip (into .venv), npm or \
+`npm install -g` (installs to ~/.local), or download a prebuilt binary with curl into \
+~/.local/bin (on PATH, kept between runs). If something needs a system package, tell the user \
+which one rather than guessing. Never conclude there's no network without testing it \
+(e.g. `curl -sSI https://example.com`).
 - A failed command shows its exit code. Read the error and change your approach; don't repeat \
 the same command hoping for a different result.
 - Never claim something works (tests pass, build succeeds) unless a command's output shows it.

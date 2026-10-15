@@ -33,6 +33,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ripgrep curl ca-certificates procps \
+      wget unzip xz-utils jq build-essential \
  && rm -rf /var/lib/apt/lists/* \
  && python -m venv /opt/venv
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -66,6 +67,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 python3-venv git ripgrep curl ca-certificates procps \
+      wget unzip xz-utils jq build-essential \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv /opt/venv
 # SearXNG in its own venv, so its pinned dependencies stay separate from the platform's.

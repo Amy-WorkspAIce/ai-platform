@@ -87,6 +87,24 @@ def test_workspace_venv_is_auto_activated(tmp_path):
     assert env["PATH"].startswith(str(bin_dir)) and env["VIRTUAL_ENV"] == str(bin_dir.parent)
 
 
+def test_user_level_installs_without_root(tmp_path):
+    home = tmp_path / "home"
+    env = Workspace(tmp_path, home=home).env()
+    assert str(home / ".local" / "bin") in env["PATH"].split(os.pathsep)
+    assert env["NPM_CONFIG_PREFIX"] == str(home / ".local")
+
+
+@posix_only
+def test_failed_system_install_explains_no_root(tmp_path):
+    ws = Workspace(tmp_path)
+    out, ok = asyncio.run(
+        ws.execute("apt-get() { echo 'Permission denied'; return 100; }; apt-get update")
+    )
+    assert not ok and "not a network problem" in out and "~/.local/bin" in out
+    out, _ = asyncio.run(ws.execute("exit 1"))
+    assert "not a network problem" not in out
+
+
 def test_default_git_identity(tmp_path):
     home = tmp_path / "home"
     Workspace(tmp_path, home=home).env()

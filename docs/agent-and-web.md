@@ -86,7 +86,15 @@ The approval card shows what will happen (the command, or the file content or di
 
 - Commands run in a fresh, non-interactive `bash` in the workspace, with a 10-minute limit
   (`AMY_AGENT_COMMAND_TIMEOUT`).
-- Tools available: `git`, `python3`, `node`/`npm`/`npx`, `ripgrep`, `curl`.
+- Tools available: `git`, `python3`, `node`/`npm`/`npx`, `ripgrep`, `curl`, `wget`, `jq`,
+  `unzip`, `make`, `gcc`/`g++`. Internet access works.
+- Commands run as the container's unprivileged user (`PUID`), **not root**: `sudo` and
+  `apt-get` can't install system packages. The agent installs what it needs at user level:
+  Python packages into `.venv`, Node packages with `npm` (`npm install -g` goes to
+  `~/.local`), and other tools as prebuilt binaries in `~/.local/bin`, which is on `PATH` and
+  kept between runs (in the agent's home under `/data`). When a command fails because it
+  tried a system package manager, the agent is told why, so it doesn't mistake it for a
+  network problem. A separate sandbox container with root is on the roadmap.
 - If the workspace has a `.venv` (or `venv`), it's **automatically active**: after
   `python3 -m venv .venv`, plain `pip`/`python`/`pytest` use it.
 - The platform's secrets (API key, provider keys, `AMY_*`) are removed from the command

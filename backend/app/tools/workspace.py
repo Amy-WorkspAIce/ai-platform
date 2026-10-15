@@ -23,6 +23,17 @@ MAX_OUTPUT_CHARS = 16_000
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
 
 # Environment variables never passed to agent commands.
+# Models misread "permission denied" from apt-get as "no network", so explain the failure.
+SYSTEM_INSTALL = re.compile(r"\b(sudo|apt-get|apt|dpkg|apk|yum|dnf)\b")
+NO_ROOT_HINT = (
+    "[Note: commands run as an unprivileged user, so sudo and system package managers "
+    "(apt-get, apk, ...) can't install anything. This is not a network problem: internet "
+    "access works (curl is available). Instead: Python packages with pip (into .venv), Node "
+    "packages with npm or `npm install -g` (goes to ~/.local), other tools by downloading a "
+    "prebuilt binary with curl into ~/.local/bin (already on PATH). If a system package is "
+    "truly required, tell the user which one.]"
+)
+
 SECRET_ENV = re.compile(r"^(AMY_|OLLAMA_|HF_TOKEN|.*(_KEY|_TOKEN|_SECRET|PASSWORD).*$)")
 
 
@@ -156,6 +167,11 @@ class Workspace:
             env["PATH"] = os.pathsep.join(
                 p for p in env.get("PATH", "").split(os.pathsep) if p and p != own_bin
             )
+        # Commands don't run as root, so user-level installs go to ~/.local (persistent, in
+        # the agent home): binaries downloaded to ~/.local/bin and `npm install -g`.
+        local_bin = self.home / ".local" / "bin"
+        env["PATH"] = os.pathsep.join([str(local_bin), env.get("PATH", "")])
+        env["NPM_CONFIG_PREFIX"] = str(self.home / ".local")
         # A workspace virtualenv is always active, so plain `pip`/`python`/`pytest` use it.
         # (Each command is a fresh shell; models often expect `source activate` to persist.)
         for name in (".venv", "venv"):
@@ -219,7 +235,11 @@ class Workspace:
             _kill(proc)
             raise
         text = clip(out.decode(errors="replace"))
-        return f"{text}\n[exit code {proc.returncode}]".lstrip(), proc.returncode == 0
+        ok = proc.returncode == 0
+        result = f"{text}\n[exit code {proc.returncode}]".lstrip()
+        if not ok and SYSTEM_INSTALL.search(command):
+            result += f"\n{NO_ROOT_HINT}"
+        return result, ok
 
 
 def _kill(proc: asyncio.subprocess.Process) -> None:
