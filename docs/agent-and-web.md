@@ -92,9 +92,7 @@ The approval card shows what will happen (the command, or the file content or di
   `apt-get` can't install system packages. The agent installs what it needs at user level:
   Python packages into `.venv`, Node packages with `npm` (`npm install -g` goes to
   `~/.local`), and other tools as prebuilt binaries in `~/.local/bin`, which is on `PATH` and
-  kept between runs (in the agent's home under `/data`). For example, ask for the GitHub CLI
-  and the agent downloads `gh` from its releases; it signs in with `AMY_GITHUB_TOKEN` if set.
-  When a command fails because it
+  kept between runs (in the agent's home under `/data`). When a command fails because it
   tried a system package manager, the agent is told why, so it doesn't mistake it for a
   network problem. A separate sandbox container with root is on the roadmap.
 - If the workspace has a `.venv` (or `venv`), it's **automatically active**: after
