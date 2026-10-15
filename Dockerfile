@@ -36,13 +36,6 @@ RUN apt-get update \
       wget unzip xz-utils jq build-essential \
  && rm -rf /var/lib/apt/lists/* \
  && python -m venv /opt/venv
-# GitHub CLI for agent mode (uses GH_TOKEN from AMY_GITHUB_TOKEN), from GitHub's apt repo.
-RUN mkdir -p -m 755 /etc/apt/keyrings \
- && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
- && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
- && apt-get update && apt-get install -y --no-install-recommends gh \
- && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
@@ -77,12 +70,6 @@ RUN apt-get update \
       wget unzip xz-utils jq build-essential \
  && rm -rf /var/lib/apt/lists/* \
  && python3 -m venv /opt/venv
-RUN mkdir -p -m 755 /etc/apt/keyrings \
- && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
- && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
- && apt-get update && apt-get install -y --no-install-recommends gh \
- && rm -rf /var/lib/apt/lists/*
 # SearXNG in its own venv, so its pinned dependencies stay separate from the platform's.
 # (Its installer imports searx, which reads SEARXNG_SETTINGS_PATH, so copy settings first.)
 COPY docker/searxng.yml /etc/amy/searxng.yml
