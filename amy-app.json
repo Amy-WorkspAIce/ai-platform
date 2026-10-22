@@ -32,7 +32,10 @@
     {
       "name": "AMY_OLLAMA_URL",
       "label": "Ollama server URL",
-      "description": "Slim only: an Ollama server to use, e.g. http://192.168.1.10:11434. Leave blank with the built-in Ollama."
+      "description": "An Ollama server to use, e.g. http://192.168.1.10:11434.",
+      "variants": [
+        "slim"
+      ]
     },
     {
       "name": "AMY_GITHUB_TOKEN",
@@ -42,6 +45,8 @@
     }
   ],
   "provides": {
-    "ai": { "key_env": "AMY_API_KEY" }
+    "ai": {
+      "key_env": "AMY_API_KEY"
+    }
   }
 }
