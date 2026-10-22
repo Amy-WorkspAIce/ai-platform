@@ -48,5 +48,6 @@
     "ai": {
       "key_env": "AMY_API_KEY"
     }
-  }
+  },
+  "key_env": "AMY_API_KEY"
 }

@@ -20,6 +20,15 @@ function storageSet(key: string, value: string): void {
 
 export const getApiKey = () => storageGet(KEY_STORAGE);
 export const setApiKey = (key: string) => storageSet(KEY_STORAGE, key);
+/** The hub's Open button signs you in by passing the key after "#amy-key=" (the part of a URL
+ * browsers never send to the server). Save it and clean it out of the address bar. */
+export function takeKeyFromUrl(): void {
+  const match = window.location.hash.match(/amy-key=([^&]+)/);
+  if (!match) return;
+  setApiKey(decodeURIComponent(match[1]));
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
 export const getPref = (name: string) => storageGet(`amy.${name}`);
 export const setPref = (name: string, value: string) => storageSet(`amy.${name}`, value);
 

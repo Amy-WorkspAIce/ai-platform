@@ -193,8 +193,8 @@ function KeyPrompt({ error, onSubmit }: { error: string; onSubmit: (key: string)
         <p className="readout">AI Platform</p>
       </div>
       <p className="muted">
-        Enter your API key. On first start it is printed in the container logs and saved to{" "}
-        <code>/data/secrets/api_key</code>.
+        Installed from the Amy-WorkspAIce hub? Use its <strong>Open</strong> button and you're signed in automatically. Otherwise
+        enter your API key: it's printed in the container logs on first start and saved to <code>/data/secrets/api_key</code>.
       </p>
       <input
         type="password"
