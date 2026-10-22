@@ -268,10 +268,16 @@ async def _run_video(app, job: dict, payload: dict) -> None:
 # ---------------------------------------------------------------- audio
 
 
+def default_voice(app) -> str | None:
+    us = getattr(app.state, "user_settings", None)
+    return us.voice if us else None
+
+
 async def speak(
     app, model: str, text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "wav"
 ) -> bytes:
     model_dir, _ = resolve(app, model, "audio", "speech")
+    voice = voice or default_voice(app)
     try:
         resp = await app.state.engines.call(
             "audio",
@@ -292,6 +298,7 @@ async def speak(
 async def speak_to_library(
     app, model: str, text: str, voice: str | None = None, speed: float = 1.0
 ) -> dict:
+    voice = voice or default_voice(app)
     audio = await speak(app, model, text, voice, speed)
     audio_id = uuid.uuid4().hex
     (data_dir(app, "audio") / f"{audio_id}.wav").write_bytes(audio)

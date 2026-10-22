@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
 import { Api, getPref, setPref, type AppSettings } from "../api";
+import {
+  MIC_PREF,
+  SPEAKER_PREF,
+  canChooseSpeaker,
+  describeVoice,
+  routeAudio,
+  sampleText,
+  useAudioDevices,
+  useDevicePref,
+} from "../devices";
+import { Icon } from "../icons";
+import { canRecord } from "../recorder";
 
 type Props = { api: Api; onChanged?: () => void; onSignOut: () => void };
 
@@ -43,6 +55,8 @@ export function SettingsView({ api, onChanged, onSignOut }: Props) {
         models={settings.models}
         onChange={(models) => setSettings({ ...settings, models })}
       />
+
+      <VoiceAndDevices api={api} settings={settings} onVoice={(voice) => setSettings({ ...settings, voice })} />
 
       <section className="card setting">
         <div className="setting-head">
@@ -301,6 +315,182 @@ function DefaultModels({
           );
         })}
       </div>
+      {error && <p className="error small">{error}</p>}
+    </section>
+  );
+}
+
+function VoiceAndDevices({
+  api,
+  settings,
+  onVoice,
+}: {
+  api: Api;
+  settings: AppSettings;
+  onVoice: (voice: string | null) => void;
+}) {
+  const speech = settings.models.speech;
+  const model = speech.pinned ?? speech.best;
+  const [voices, setVoices] = useState<string[] | null>(null);
+  const [lang, setLang] = useState("");
+  const [playing, setPlaying] = useState("");
+  const [error, setError] = useState("");
+  const devices = useAudioDevices();
+  const [mic, setMic] = useDevicePref(MIC_PREF);
+  const [speaker, setSpeaker] = useDevicePref(SPEAKER_PREF);
+
+  useEffect(() => {
+    if (!model) return;
+    api
+      .voices(model)
+      .then((r) => setVoices(r.voices))
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [api, model]);
+
+  const current = settings.voice ?? "af_heart";
+  const byLang = new Map<string, string[]>();
+  for (const v of voices ?? []) {
+    const l = describeVoice(v).language;
+    byLang.set(l, [...(byLang.get(l) ?? []), v]);
+  }
+  const shownLang = lang || describeVoice(current).language;
+
+  async function preview(voice: string) {
+    if (!model) return;
+    setPlaying(voice);
+    try {
+      const url = URL.createObjectURL(await api.speak(model, sampleText(voice), voice));
+      const a = new Audio(url);
+      routeAudio(a);
+      a.onended = () => {
+        setPlaying("");
+        URL.revokeObjectURL(url);
+      };
+      await a.play();
+    } catch (e) {
+      setPlaying("");
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function choose(voice: string) {
+    setError("");
+    try {
+      onVoice((await api.saveVoice(voice)).voice);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <section className="card setting">
+      <h2>Voices and devices</h2>
+      <h3 className="setting-sub">Voice</h3>
+      {!model ? (
+        <p className="muted small">Install a text-to-speech model (such as Kokoro) from Models to choose a voice.</p>
+      ) : !voices ? (
+        <p className="muted small">{error ? "" : "Loading voices…"}</p>
+      ) : (
+        <>
+          <p className="muted small">
+            Used for <strong>Read aloud</strong> and when chat speaks. All {voices.length} voices come with the model, so
+            there's nothing extra to download. Press play to hear one.
+          </p>
+          <div className="segmented wrap" role="radiogroup" aria-label="Language">
+            {[...byLang.keys()].map((l) => (
+              <button key={l} role="radio" aria-checked={shownLang === l} className={shownLang === l ? "active" : ""} onClick={() => setLang(l)}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <div className="voice-grid">
+            {(byLang.get(shownLang) ?? []).map((v) => {
+              const d = describeVoice(v);
+              return (
+                <div key={v} className={`voice ${v === current ? "selected" : ""}`}>
+                  <button className="icon-button" title={`Hear ${d.name}`} disabled={!!playing} onClick={() => void preview(v)}>
+                    {playing === v ? "…" : <Icon name="volume" size={14} label={`Hear ${d.name}`} />}
+                  </button>
+                  <span>
+                    <strong>{d.name}</strong>
+                    <span className="muted small"> {d.gender}</span>
+                  </span>
+                  {v === current ? (
+                    <span className="tag tools">In use</span>
+                  ) : (
+                    <button className="link" onClick={() => void choose(v)}>
+                      Use
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <h3 className="setting-sub">Microphone and speakers</h3>
+      {!devices.supported ? (
+        <p className="muted small">
+          This browser can't list audio devices here (it needs HTTPS), so it uses the system defaults.
+        </p>
+      ) : (
+        <>
+          <div className="model-defaults">
+            <label className="model-default">
+              <span>
+                <strong>Microphone</strong>
+                <span className="muted small"> · for dictation</span>
+              </span>
+              <select value={mic} onChange={(e) => setMic(e.target.value)}>
+                <option value="">System default</option>
+                {devices.mics
+                  .filter((d) => d.deviceId && d.deviceId !== "default")
+                  .map((d, i) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.label || `Microphone ${i + 1}`}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="model-default">
+              <span>
+                <strong>Speakers</strong>
+                <span className="muted small"> · for read-aloud and audio</span>
+              </span>
+              {canChooseSpeaker() ? (
+                <select value={speaker} onChange={(e) => setSpeaker(e.target.value)}>
+                  <option value="">System default</option>
+                  {devices.speakers
+                    .filter((d) => d.deviceId && d.deviceId !== "default")
+                    .map((d, i) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || `Speakers ${i + 1}`}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <span className="muted small">This browser always uses the system output.</span>
+              )}
+            </label>
+          </div>
+          {!devices.labelled && canRecord() && (
+            <p className="muted small">
+              Browsers hide device names until you allow the microphone.{" "}
+              <button className="link" onClick={() => devices.ask().catch(() => setError("Microphone access was blocked."))}>
+                Allow and show names
+              </button>
+            </p>
+          )}
+          <p className="muted small">Saved in this browser only, since each device has its own hardware.</p>
+        </>
+      )}
+      {!canRecord() && (
+        <p className="muted small">
+          The microphone only works on secure pages (HTTPS or localhost), and this page is plain HTTP. Open Amy through
+          HTTPS (a reverse proxy or Tailscale) to dictate from this browser; attaching a recording works either way.
+        </p>
+      )}
       {error && <p className="error small">{error}</p>}
     </section>
   );

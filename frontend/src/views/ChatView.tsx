@@ -12,6 +12,7 @@ import {
   type WorkspaceInfo,
 } from "../api";
 import { AttachmentView, ImageView } from "../media";
+import { routeAudio } from "../devices";
 import { canRecord, extensionFor, useRecorder } from "../recorder";
 import { Icon } from "../icons";
 
@@ -470,9 +471,7 @@ export function ChatView({
         >
           {uploading ? "…" : <Icon name="attach" size={18} label="Attach image" />}
         </button>
-        {sttModel && (
-          <MicButton api={api} model={sttModel} onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} onError={setError} />
-        )}
+        <MicButton api={api} model={sttModel} onText={(t) => setInput((v) => (v ? `${v} ${t}` : t))} onError={setError} />
         {busy ? (
           <button type="button" className="primary" onClick={() => abort.current?.abort()}>
             Stop
@@ -802,6 +801,7 @@ function SpeakButton({ api, model, text }: { api: Api; model: string; text: stri
     try {
       const url = URL.createObjectURL(await api.speak(model, text));
       const a = new Audio(url);
+      routeAudio(a);
       a.onended = () => {
         setState("idle");
         URL.revokeObjectURL(url);
@@ -838,7 +838,7 @@ function MicButton({
   onError,
 }: {
   api: Api;
-  model: string;
+  model?: string;
   onText: (text: string) => void;
   onError: (msg: string) => void;
 }) {
@@ -847,6 +847,18 @@ function MicButton({
   const available = canRecord();
 
   async function toggle() {
+    if (!model) {
+      onError("Dictation needs a speech-to-text model. Install Whisper from Models (Transcription), then the mic works here.");
+      return;
+    }
+    if (!available) {
+      onError(
+        "Browsers only allow the microphone on secure pages (HTTPS or localhost), and this page is plain HTTP. " +
+          "Open Amy through HTTPS (a reverse proxy or Tailscale), or in Chrome allow this address at " +
+          "chrome://flags/#unsafely-treat-insecure-origin-as-secure. You can also attach a recording with the paperclip.",
+      );
+      return;
+    }
     if (!recording) {
       try {
         await start();
@@ -872,8 +884,16 @@ function MicButton({
     <button
       type="button"
       className={`icon-button mic ${recording ? "recording" : ""}`}
-      disabled={!available || transcribing}
-      title={available ? (recording ? "Stop and transcribe" : "Dictate") : "Microphone access needs HTTPS (or localhost)"}
+      disabled={transcribing}
+      title={
+        !model
+          ? "Dictate (install a speech-to-text model first)"
+          : available
+            ? recording
+              ? "Stop and transcribe"
+              : "Dictate"
+            : "Microphone access needs HTTPS (or localhost)"
+      }
       onClick={toggle}
     >
       {transcribing ? (

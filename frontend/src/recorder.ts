@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { micConstraints } from "./devices";
 
 /** Microphone access needs a secure context: HTTPS or localhost. */
 export function canRecord(): boolean {
@@ -15,7 +16,7 @@ export function useRecorder() {
   const chunks = useRef<Blob[]>([]);
 
   const start = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia(micConstraints());
     const rec = new MediaRecorder(stream);
     chunks.current = [];
     rec.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);

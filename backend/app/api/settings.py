@@ -25,6 +25,10 @@ class WebBody(BaseModel):
     enabled: bool
 
 
+class VoiceBody(BaseModel):
+    voice: str | None = Field(default=None, max_length=100)
+
+
 def store(request: Request) -> UserSettings:
     return request.app.state.user_settings
 
@@ -42,6 +46,7 @@ async def get_settings(request: Request) -> dict:
         "huggingface": huggingface_status(store(request)),
         "search": {"providers": provider_chain(s), "bundled_searxng": s.bundled_searxng},
         "web_access": store(request).web_access,
+        "voice": store(request).voice,
         "models": model_choices(request),
     }
 
@@ -75,6 +80,12 @@ async def set_model_default(request: Request, body: ModelDefaultBody) -> dict:
 async def set_web_access(request: Request, body: WebBody) -> dict:
     store(request).set_web_access(body.enabled)
     return {"web_access": body.enabled}
+
+
+@router.put("/voice")
+async def set_voice(request: Request, body: VoiceBody) -> dict:
+    store(request).set_voice(body.voice)
+    return {"voice": store(request).voice}
 
 
 @router.put("/huggingface")

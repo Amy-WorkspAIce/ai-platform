@@ -3,6 +3,7 @@
   "id": "ai-platform",
   "name": "AI Platform",
   "description": "Run AI models on your own GPU: chat, agent mode, images, video and voice, with an OpenAI-compatible API the other apps use.",
+  "icon": "https://raw.githubusercontent.com/Amy-WorkspAIce/brand/main/logos/amy-workspaice-app-icon-512.png",
   "image": "ghcr.io/amy-workspaice/ai-platform",
   "variants": [
     {

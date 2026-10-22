@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Api, Attachment, VideoJob } from "./api";
+import { routeAudio } from "./devices";
 import { Icon } from "./icons";
 
 /** Fetch one auth-protected file as an object URL (released when unmounted). */
@@ -114,7 +115,7 @@ export function VideoJobView({ api, jobId }: { api: Api; jobId: string }) {
 export function AudioView({ api, id }: { api: Api; id: string }) {
   const url = useBlobUrl(() => api.audioUrl(id), id);
   if (!url) return <div className="media-placeholder small">…</div>;
-  return <audio className="media audio" src={url} controls />;
+  return <audio className="media audio" src={url} controls ref={routeAudio} />;
 }
 
 export function AttachmentView({ api, attachment }: { api: Api; attachment: Attachment }) {

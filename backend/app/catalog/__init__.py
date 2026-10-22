@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from app.catalog.limits import limits_for
 from app.hardware import Hardware
 
 Fit = Literal["gpu", "light", "partial", "cpu", "too_large", "unknown"]
@@ -236,7 +237,10 @@ def flatten(families: list[dict]) -> list[dict]:
     """One row per installable model (family + variant), for a single sortable table."""
     rows = []
     for f in families:
-        base = {k: f.get(k) for k in FAMILY_FIELDS} | {"family_id": f["id"]}
+        base = {k: f.get(k) for k in FAMILY_FIELDS} | {
+            "family_id": f["id"],
+            "limits": limits_for(f),
+        }
         if not f["variants"]:  # listed but not runnable here (e.g. cloud-only)
             rows.append(
                 base

@@ -7,6 +7,7 @@ import {
   type Fit,
   type Hardware,
   type InstalledModel,
+  type ModelLimit,
   type ModelRow,
   type PullState,
   type SortKey,
@@ -405,6 +406,7 @@ function Row({ row: r, useCases, ...actions }: { row: ModelRow; useCases: Catalo
           {r.description ? ` · ${r.description}` : ""}
         </div>
         {(r.unsupported || r.engine_note) && <div className="engine-note small">{r.unsupported || r.engine_note}</div>}
+        <Limits limits={r.limits} />
       </div>
       <span className="muted small cell-size" title={r.size_estimated ? "Estimated; exact size is known at install" : undefined}>
         {r.size_gb != null ? `${r.size_estimated ? "~" : ""}${r.size_gb} GB` : "?"}
@@ -423,6 +425,39 @@ function Row({ row: r, useCases, ...actions }: { row: ModelRow; useCases: Catalo
       </span>
       {r.unsupported ? <span className="row-actions muted small">Not supported yet</span> : <Action row={r} {...actions} />}
     </div>
+  );
+}
+
+const LIMIT_LABEL: Record<ModelLimit["kind"], string> = {
+  content: "Won't do",
+  open: "Unfiltered",
+  license: "License",
+  quality: "Weak spot",
+};
+
+/** Known limits of a model, folded away behind a one-line summary. */
+function Limits({ limits }: { limits?: ModelLimit[] }) {
+  if (!limits?.length) return null;
+  const kinds = [...new Set(limits.map((l) => l.kind))];
+  return (
+    <details className="model-limits small">
+      <summary>
+        {kinds.map((k) => (
+          <span key={k} className={`tag limit-${k}`}>
+            {LIMIT_LABEL[k]}
+          </span>
+        ))}
+        <span className="muted">Limits</span>
+      </summary>
+      <ul>
+        {limits.map((l) => (
+          <li key={l.text}>
+            <span className={`tag limit-${l.kind}`}>{LIMIT_LABEL[l.kind]}</span> {l.text}
+          </li>
+        ))}
+      </ul>
+      <p className="muted">From model cards, licenses and reports; behaviour can vary between versions and fine-tunes.</p>
+    </details>
   );
 }
 
@@ -577,6 +612,7 @@ function InstalledModels({
                   <div className="model-meta muted small">
                     <span className="mono">{r.tag}</span> · {r.use_cases.map((u) => names[u] ?? u).join(" · ")}
                   </div>
+                  <Limits limits={r.limits} />
                 </div>
                 <span className="muted small cell-size">{r.size_gb != null ? `${r.size_gb} GB` : "?"}</span>
                 <span className="cell-fit">

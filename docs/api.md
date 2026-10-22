@@ -34,10 +34,10 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET | `/api/system` | Version and provider status. |
 | GET | `/api/hardware` | Detected GPUs (VRAM), RAM, CPU count, free disk in `/data`. |
 | GET | `/api/catalog` | Curated model catalog annotated with `fit`, `installed`, `needed_gb` per variant, plus `recommendations` per use case. |
-| GET | `/api/catalog/models` | The whole model table in one response (one row per installable model: curated + Ollama library + top Hugging Face image/video/speech), annotated with `fit`, `installed`, `requires_token`, `downloads` (`downloads_scope`: `model`, or `family` where only per-family counts exist). Cached server-side; the UI fetches it once and filters/sorts locally. |
+| GET | `/api/catalog/models` | The whole model table in one response (one row per installable model: curated + Ollama library + top Hugging Face image/video/speech), annotated with `fit`, `installed`, `requires_token`, `downloads` (`downloads_scope`: `model`, or `family` where only per-family counts exist) and `limits` (`[{"kind": "content"|"open"|"license"|"quality", "text"}]`: what the model refuses or has no filter for, license restrictions, weak spots; curated rules matched by name, plus license and Hugging Face tags). Cached server-side; the UI fetches it once and filters/sorts locally. |
 | GET | `/api/catalog/search?q=` | Search Hugging Face beyond the standard listing (GGUF chat models plus image/video/speech). Returns rows in the same shape. |
 | GET | `/api/catalog/browse` | The same table filtered and sorted server-side, for API clients. Query: `category`, `q`, `sort` (`perfect`, `fit`, `size_asc`, `size_desc`, `name`, `popular`), `runnable`, `offset`, `limit`. |
-| GET | `/api/settings` | Settings page data (Hugging Face status, search providers, version). |
+| GET | `/api/settings` | Settings page data (Hugging Face status, search providers, default models, voice, version). |
 | PUT/DELETE | `/api/settings/huggingface` | Save (`{"token"}`, validated with Hugging Face) or remove the Hugging Face token. |
 | GET | `/api/models/installed` | Models installed in Ollama. |
 | POST | `/api/models/pull` | `{"model": "qwen3:8b"}`, starts a background download (202). Accepts any Ollama tag or `hf.co/user/repo:quant`; for Hugging Face diffusers/whisper repos add `"engine": "image"` or `"audio"` (the download plan is worked out from the repo). |
@@ -59,6 +59,7 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET/DELETE | `/api/audio/{id}` | Fetch the WAV, or delete it. |
 | PUT | `/api/settings/models` | `{"capability": "image"|"video"|"speech"|"transcription", "model": "<id>"|null}`: pin a model, or `null` for best installed. |
 | PUT | `/api/settings/web` | `{"enabled": bool}`: allow web access in chats. |
+| PUT | `/api/settings/voice` | `{"voice": "bm_george"|null}`: the default text-to-speech voice (used when a request names none). |
 | GET/DELETE | `/api/images/{id}` | Fetch the PNG, or delete it. |
 | GET | `/api/audio/voices?model=audio/kokoro-82m` | Voices for a text-to-speech model. |
 | GET | `/api/videos/jobs` | Video jobs with live progress (`phase`, `step`, `steps`, `status`, `error`). |

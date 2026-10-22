@@ -31,9 +31,13 @@ call, and it can act on those apps through their APIs.
   **Perfect match**: the most capable models that still run well on your machine. Curated
   picks per use case sit on top; one click installs anything, including the engine it needs.
   Gated models work with your Hugging Face token (Settings). Click a column to sort, filter to
-  models that fit on your GPU, and manage what's installed on the **Installed** tab.
+  models that fit on your GPU, and manage what's installed on the **Installed** tab. Each
+  model lists its known **limits**: content it refuses (or has no filter for), what its
+  license forbids, and known weak spots.
 - **ChatGPT-style chat** with saved conversations in collapsible folders (drag and drop),
-  streaming, markdown, collapsible "thinking" for reasoning models, dictation and read-aloud.
+  streaming, markdown, collapsible "thinking" for reasoning models, dictation (the mic button,
+  with Whisper installed; browsers allow the microphone only over HTTPS or on localhost) and
+  read-aloud. Pick the voice (Kokoro comes with dozens), microphone and speakers in Settings.
 - **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …") and
   brings the relevant ones into new conversations. The Memory page lets you search, edit,
   add and delete them, or switch memory off. Secrets are never stored.

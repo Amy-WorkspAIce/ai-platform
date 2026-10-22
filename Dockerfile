@@ -47,6 +47,7 @@ COPY --from=frontend /src/dist /app/static
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 EXPOSE 8484
+LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/Amy-WorkspAIce/brand/main/logos/amy-workspaice-app-icon-512.png" \n      net.unraid.docker.webui="http://[IP]:[PORT:8484]/"
 VOLUME /data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8484/health')"
@@ -92,6 +93,7 @@ COPY --from=frontend /src/dist /app/static
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 EXPOSE 8484
+LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/Amy-WorkspAIce/brand/main/logos/amy-workspaice-app-icon-512.png" \n      net.unraid.docker.webui="http://[IP]:[PORT:8484]/"
 VOLUME /data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8484/health')"

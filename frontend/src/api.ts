@@ -223,6 +223,11 @@ export class Api {
       method: "PUT",
       body: JSON.stringify({ capability, model }),
     });
+  saveVoice = (voice: string | null) =>
+    this.request<{ voice: string | null }>("/api/settings/voice", {
+      method: "PUT",
+      body: JSON.stringify({ voice }),
+    });
   saveWebAccess = (enabled: boolean) =>
     this.request<{ web_access: boolean }>("/api/settings/web", {
       method: "PUT",
@@ -319,7 +324,11 @@ export type ModelRow = Variant & {
   unsupported?: string | null;
   engine_note: string | null;
   engine_installed: boolean;
+  /** What the model won't do: content it refuses, license restrictions, weak spots. */
+  limits?: ModelLimit[];
 };
+
+export type ModelLimit = { kind: "content" | "open" | "license" | "quality"; text: string };
 
 export type ModelTable = { models: ModelRow[]; hardware: Hardware; hf_token_set: boolean };
 
@@ -336,6 +345,8 @@ export type AppSettings = {
   huggingface: HfStatus;
   search: { providers: string[]; bundled_searxng: boolean };
   web_access: boolean;
+  /** Default text-to-speech voice; null = the model's own default. */
+  voice: string | null;
   models: Record<"image" | "video" | "speech" | "transcription", ModelChoice>;
 };
 

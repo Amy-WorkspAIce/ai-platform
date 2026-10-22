@@ -282,3 +282,18 @@ def test_upload_image_for_editing(client):
         "/api/images/upload", headers=AUTH, files={"file": ("x.txt", b"hi", "text/plain")}
     )
     assert bad.status_code == 400
+
+
+def test_default_voice_is_used_when_none_is_asked_for(client):
+    install(client.app, "audio", "kokoro-82m")
+    assert client.get("/api/settings", headers=AUTH).json()["voice"] is None
+    client.put("/api/settings/voice", headers=AUTH, json={"voice": "bm_george"})
+    assert client.get("/api/settings", headers=AUTH).json()["voice"] == "bm_george"
+    client.post("/v1/audio/speech", headers=AUTH, json={"model": "audio/kokoro-82m", "input": "hi"})
+    assert client.fake.calls[-1][1]["voice"] == "bm_george"
+    client.post(
+        "/v1/audio/speech",
+        headers=AUTH,
+        json={"model": "audio/kokoro-82m", "input": "hi", "voice": "af_bella"},
+    )
+    assert client.fake.calls[-1][1]["voice"] == "af_bella"  # an explicit voice wins

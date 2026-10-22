@@ -322,6 +322,7 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "name": repo.split("/", 1)[1],
         "publisher": repo.split("/", 1)[0],
         "license": card.get("license"),
+        "tags": [t for t in tags if t == "not-for-all-audiences"],
         "description": describe_hf(
             diffusers_cls or model.get("pipeline_tag"), model.get("likes", 0)
         ),

@@ -75,6 +75,16 @@ class UserSettings:
         self._save_prefs(prefs)
 
     @property
+    def voice(self) -> str | None:
+        """The voice read-aloud and the speak tool use when none is asked for."""
+        return self._prefs().get("voice") or None
+
+    def set_voice(self, voice: str | None) -> None:
+        prefs = self._prefs()
+        prefs["voice"] = voice or None
+        self._save_prefs(prefs)
+
+    @property
     def web_access(self) -> bool:
         return bool(self._prefs().get("web_access", True))
 
