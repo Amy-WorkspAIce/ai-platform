@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "id": "ai-platform",
+  "name": "AI Platform",
+  "description": "Run AI models on your own GPU: chat, agent mode, images, video and voice, with an OpenAI-compatible API the other apps use.",
+  "image": "ghcr.io/amy-workspaice/ai-platform",
+  "variants": [
+    {
+      "id": "full",
+      "name": "With built-in Ollama",
+      "tag": "latest",
+      "description": "Runs models on this machine's NVIDIA GPU (or CPU). Recommended.",
+      "gpu": true
+    },
+    {
+      "id": "slim",
+      "name": "Slim",
+      "tag": "slim",
+      "description": "No built-in model engine; point it at an Ollama server elsewhere."
+    }
+  ],
+  "port": 8484,
+  "health": "/health",
+  "data": "/data",
+  "settings": [
+    {
+      "name": "AMY_HF_TOKEN",
+      "label": "Hugging Face token",
+      "description": "For gated image and video models. Can also be added later in the AI Platform's Settings.",
+      "secret": true
+    },
+    {
+      "name": "AMY_OLLAMA_URL",
+      "label": "Ollama server URL",
+      "description": "Slim only: an Ollama server to use, e.g. http://192.168.1.10:11434. Leave blank with the built-in Ollama."
+    },
+    {
+      "name": "AMY_GITHUB_TOKEN",
+      "label": "GitHub token for agent mode",
+      "description": "Lets agent mode clone private repos and push. A fine-grained token limited to those repos is best.",
+      "secret": true
+    }
+  ],
+  "provides": {
+    "ai": { "key_env": "AMY_API_KEY" }
+  }
+}
