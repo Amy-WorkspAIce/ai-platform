@@ -51,7 +51,9 @@ call, and it can act on those apps through their APIs.
   approval before each change or command.
 - **Image and video generation**: FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5, any diffusers
   model from Hugging Face; Wan 2.1 and LTX-Video for clips (rendered as background jobs).
-  Galleries for both. Plus **audio**: transcription (Whisper) and text-to-speech (Kokoro). The engines
+  Galleries for both. Plus **audio**: transcription (Whisper) and text-to-speech: Kokoro, plus
+  Hugging Face voice models that need their own library (Chatterbox, XTTS, F5-TTS, Qwen3-TTS,
+  MMS, Bark), each installed into its own environment the first time. The engines
   these need (PyTorch/diffusers, faster-whisper, ONNX) install themselves into `/data` the
   first time you install such a model, so the base image stays lean.
 - **OpenAI-compatible API** at `/v1`: chat, images, transcriptions and speech. Point any
@@ -122,6 +124,7 @@ print(reply.choices[0].message.content)
 - [x] Hardware-aware model discovery, one-click install with progress, delete
 - [x] Saved conversation history (sidebar chat list)
 - [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
+- [x] Speech runtimes: Chatterbox, XTTS, F5-TTS, Qwen3-TTS, MMS and Bark, each in its own venv; gated GGUF models imported into Ollama with your Hugging Face token
 - [x] Web access (search + page reading) and agent mode with approvals
 - [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)

@@ -18,10 +18,13 @@ import logging
 import math
 import re
 import time
+from fnmatch import fnmatch
 from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
+
+from app.catalog import speech
 
 log = logging.getLogger(__name__)
 
@@ -254,6 +257,7 @@ def ollama_family(m: dict, exact_sizes: dict[str, float]) -> dict:
 
 
 HF_EXPAND = [
+    "library_name",
     "gated",
     "downloads",
     "likes",
@@ -286,7 +290,9 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
     card = model.get("cardData") or {}
     gated = model.get("gated") not in (None, False)
     diffusers_cls = next((t.split(":", 1)[1] for t in tags if t.startswith("diffusers:")), None)
-    size = _half_precision_gb(model)
+    size = half = _half_precision_gb(model)
+    if category == "speech" and not size:
+        size = speech.KNOWN_GB.get(repo.lower())
     unsupported = None
     engine = "image"
     task = category
@@ -299,10 +305,10 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
             return None
     elif category == "speech":
         engine = "audio"
-        unsupported = "Needs a speech engine Amy doesn't support yet (Kokoro is supported)."
+        unsupported = speech.unsupported_reason(model)
     variant = {
         "tag": repo,
-        "params": f"{size / 2:.1f}B" if size else "",
+        "params": f"{half / 2:.1f}B" if half else "",
         "size_gb": size,
         "size_estimated": True,
         "gated": gated,
@@ -333,6 +339,7 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "tools": False,
         "popularity": model.get("downloads", 0),
         "unsupported": unsupported,
+        "runtime": speech.runtime_for(model) if category == "speech" else None,
         "variants": [variant],
     }
 
@@ -557,10 +564,13 @@ class LiveCatalog:
                 "use_cases": ["chat"],
                 "tools": False,
                 "popularity": m.get("downloads", 0),
-                "unsupported": "Gated repos can't be pulled by Ollama yet." if gated else None,
+                "unsupported": None,
                 "variants": [
                     {
                         "tag": f"hf.co/{m['id']}:{q}",
+                        # Gated: Amy downloads it with the user's token (Ollama can't).
+                        "gated": gated,
+                        "requires_token": gated and not token,
                         "params": q,
                         "size_gb": round(gb, 2),
                         "size_estimated": False,
@@ -702,6 +712,49 @@ async def _sample_size(
         if isinstance(s, int) and s > 0:
             return s * 8 if s <= 256 else s
     return None
+
+
+async def audio_spec(repo: str, client: httpx.AsyncClient, token: str | None) -> dict:
+    """How to install any Hugging Face audio repo: Whisper (faster-whisper) for transcription,
+    or a text-to-speech model with the runtime its library needs."""
+    info = await client.get(
+        f"{HF_API}/models/{repo}", params={"blobs": "true"}, headers=hf_headers(token), timeout=30
+    )
+    if info.status_code in (401, 403):
+        raise PermissionError("gated")
+    info.raise_for_status()
+    meta = info.json()
+    siblings = meta.get("siblings") or []
+    tags = meta.get("tags") or []
+    if "ctranslate2" in tags or "faster-whisper" in repo.lower():
+        size = sum(s.get("size") or 0 for s in siblings) / 1e9
+        return whisper_spec(repo, round(size, 2) or None)
+    runtime = speech.runtime_for(meta)
+    if runtime is None:
+        raise ValueError(speech.unsupported_reason(meta) or f"Amy can't run {repo} yet.")
+    files = [s["rfilename"] for s in siblings]
+    patterns = speech.allow_patterns(runtime, repo, files)
+    chosen = [
+        s for s in siblings if patterns is None or any(fnmatch(s["rfilename"], p) for p in patterns)
+    ]
+    size = round(sum(s.get("size") or 0 for s in chosen) / 1e9, 2) or 1.0
+    source: dict = {"type": "hf", "repo": repo}
+    if patterns:
+        source["allow_patterns"] = patterns
+    return {
+        "tag": repo,
+        "params": "",
+        "size_gb": size,
+        "vram_gb": round(size * 1.3 + 1, 1),
+        "ram_gb": round(size * 1.3 + 2, 1),
+        "engine_config": {
+            "task": "speech",
+            "runtime": runtime,
+            "backend": runtime.removeprefix("tts-"),
+            "source": source,
+            "extras": speech.extras(runtime),
+        },
+    }
 
 
 def whisper_spec(repo: str, size_gb: float | None) -> dict:

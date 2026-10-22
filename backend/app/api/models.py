@@ -220,9 +220,42 @@ async def pull_model(request: Request, body: PullRequest) -> dict:
         return engines.start_install("image", {"tag": repo}, token, resolve).public()
 
     if body.engine == "audio":
-        return engines.start_install("audio", live.whisper_spec(body.model, None), token).public()
+        repo = body.model
+        client = request.app.state.http
 
-    return require_admin(request).start_pull(body.model).public()
+        async def resolve_audio() -> dict:
+            try:
+                return await live.audio_spec(repo, client, token)
+            except PermissionError:
+                raise ValueError(
+                    f"{repo} requires a Hugging Face token with access. Add your token in "
+                    f"Settings and accept the license at https://huggingface.co/{repo}."
+                ) from None
+
+        return engines.start_install("audio", {"tag": repo}, token, resolve_audio).public()
+
+    admin = require_admin(request)
+    if body.model.startswith("hf.co/") and await _gated(request, body.model, token):
+        if not token:
+            raise HTTPException(
+                400, "This model is gated: add your Hugging Face token in Settings first."
+            )
+        cache = request.app.state.settings.data_dir / "cache" / "gguf"
+        return admin.start_import(body.model, token, cache).public()
+    return admin.start_pull(body.model).public()
+
+
+async def _gated(request: Request, model: str, token: str | None) -> bool:
+    """Whether a Hugging Face GGUF repo needs a license accepted (Ollama can't pull those)."""
+    repo = model.removeprefix("hf.co/").partition(":")[0]
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        resp = await request.app.state.http.get(
+            f"https://huggingface.co/api/models/{repo}", headers=headers, timeout=15
+        )
+        return resp.is_success and resp.json().get("gated") not in (None, False)
+    except (httpx.HTTPError, ValueError):
+        return False
 
 
 @router.get("/models/pulls")

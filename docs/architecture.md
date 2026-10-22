@@ -125,6 +125,26 @@ the platform asks Ollama to unload its models so the image pipeline gets the VRA
 | `image` | torch, diffusers, transformers, accelerate | FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5 |
 | `audio` | faster-whisper (+ cuBLAS/cuDNN on GPU), kokoro-onnx | Whisper, Kokoro |
 
+**Speech runtimes.** Most Hugging Face voice models ship with a library of their own, and
+those libraries pin conflicting torch/transformers versions. A speech model's engine config
+can therefore name a **runtime**: another engine with its own venv, served by
+`speech_worker.py`. The model still belongs to `audio` (`audio/<repo>`, stored under
+`models/audio`), so chat, read-aloud, Settings and the API treat it like Kokoro; only the
+worker that loads it differs. `app/catalog/speech.py` picks the runtime from the repo's
+Hugging Face `library_name` and tags, and the files to download.
+
+| Runtime | Packages | Models |
+|---|---|---|
+| `tts-transformers` | torch, transformers | MMS-TTS / VITS (1,100+ languages), Bark |
+| `tts-chatterbox` | chatterbox-tts | Resemble AI Chatterbox |
+| `tts-f5` | f5-tts, torch/torchaudio < 2.9 | F5-TTS (plus the Vocos vocoder) |
+| `tts-xtts` | coqui-tts, torch/torchaudio < 2.9 | Coqui XTTS v2 (58 built-in speakers) |
+| `tts-qwen` | qwen-tts | Qwen3-TTS CustomVoice |
+
+torchaudio 2.9+ decodes audio through torchcodec, which needs system FFmpeg libraries the
+image doesn't have, hence the pins. Models with a library Amy has no runtime for stay listed
+as "Not supported yet", with the library named.
+
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB
 video text encoder) are streamed from RAM layer by layer (diffusers group offloading); or

@@ -30,10 +30,12 @@ def install(app, engine: str, tag: str, variant: dict | None = None):
 class FakeEngines:
     def __init__(self, supports_image=True):
         self.calls = []
+        self.engines = []
         self.supports_image = supports_image
 
     async def __call__(self, engine, path, payload, timeout=0):
         self.calls.append((path, payload))
+        self.engines.append(engine)
         if path == "/generate":
             return httpx.Response(
                 200,

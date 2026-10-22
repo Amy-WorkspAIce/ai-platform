@@ -276,11 +276,11 @@ def default_voice(app) -> str | None:
 async def speak(
     app, model: str, text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "wav"
 ) -> bytes:
-    model_dir, _ = resolve(app, model, "audio", "speech")
+    model_dir, variant = resolve(app, model, "audio", "speech")
     voice = voice or default_voice(app)
     try:
         resp = await app.state.engines.call(
-            "audio",
+            app.state.engines.runtime("audio", variant),
             "/speak",
             {
                 "model_dir": str(model_dir),
@@ -288,6 +288,7 @@ async def speak(
                 "voice": voice,
                 "speed": speed,
                 "format": fmt,
+                "config": variant["engine_config"],
             },
         )
     except EngineError as exc:

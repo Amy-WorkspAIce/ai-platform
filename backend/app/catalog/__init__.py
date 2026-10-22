@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from app.catalog import speech
 from app.catalog.limits import limits_for
 from app.hardware import Hardware
 
@@ -91,11 +92,26 @@ def find_variant(tag: str) -> tuple[dict, dict] | None:
     return None
 
 
+# A speech runtime's virtualenv: torch plus one library (measured 1.2-2.3 GB on CPU; the
+# CUDA build of torch adds several GB).
+RUNTIME_GB = {"cpu": 2, "gpu": 6}
+
+
 def annotate(fam: dict, hw: Hardware, installed: set[str], engines_installed: set[str]) -> dict:
     """Add fit, install state and the 'best for this machine' pick to a family."""
     engines = {e["id"]: e for e in load()["engines"]}
     engine = engines.get(fam["engine"], {"available": True})
-    engine_ready = fam["engine"] == "ollama" or fam["engine"] in engines_installed
+    if fam.get("runtime"):  # a speech model run by its own library's engine
+        gb = RUNTIME_GB["gpu" if hw.gpus else "cpu"]
+        engine = {
+            "available": True,
+            "install_size_gb": gb,
+            "note": f"First install also sets up the {speech.RUNTIMES[fam['runtime']]} speech "
+            f"engine (about {gb} GB, one time).",
+        }
+    engine_ready = (
+        fam["engine"] == "ollama" or (fam.get("runtime") or fam["engine"]) in engines_installed
+    )
     extra_disk = 0 if engine_ready else engine.get("install_size_gb", 0)
     variants = []
     for v in fam["variants"]:

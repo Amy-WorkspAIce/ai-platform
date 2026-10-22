@@ -8,6 +8,13 @@ downloaded to ``<data>/models/<engine>/<model>``.
 
 Each engine runs as a worker subprocess (see ``*_worker.py``) that is started on demand and
 stopped after a period of inactivity, which also returns its GPU memory to the system.
+
+**Runtimes.** Most speech models need their own library (Chatterbox, F5-TTS, XTTS...), and
+those libraries pin conflicting versions of torch and transformers. So a model can name a
+``runtime`` in its engine config: another engine, with its own virtualenv and worker, that
+runs it. The model still belongs to its engine (``audio/<repo>``, stored under
+``models/audio``), so everything that lists or calls speech models works unchanged; only the
+process that loads it differs. Runtimes are installed the first time a model needs one.
 """
 
 import asyncio
@@ -41,6 +48,9 @@ class EngineSpec:
     needs_torch: bool = False
     # Bump when packages change; installed engines are upgraded in place (no torch re-download).
     version: int = 1
+    # The packages pin their own torch version: install everything in one go, with the
+    # CUDA (or CPU) wheel index as an extra source so the pinned torch matches this machine.
+    torch_pinned: bool = False
 
 
 ENGINES: dict[str, EngineSpec] = {
@@ -82,6 +92,41 @@ ENGINES: dict[str, EngineSpec] = {
         version=2,
     ),
 }
+
+
+OLD_TORCHAUDIO = ("torch<2.9", "torchaudio<2.9")
+
+
+def _speech_runtime(id: str, name: str, *packages: str) -> EngineSpec:
+    """A text-to-speech runtime: one library in its own venv, served by speech_worker.py."""
+    return EngineSpec(
+        id=id,
+        name=f"{name} speech engine",
+        worker="speech_worker.py",
+        packages=(*packages, "soundfile", "huggingface_hub>=0.34"),
+        needs_torch=True,
+        # These libraries pin torch (and transformers) versions of their own.
+        torch_pinned=True,
+    )
+
+
+# Runtimes for speech models whose libraries need their own environment (see the module
+# docstring). Chosen per model from its Hugging Face library (app.catalog.speech).
+ENGINES.update(
+    {
+        "tts-transformers": _speech_runtime(
+            "tts-transformers", "Transformers", "torch", "transformers>=4.51"
+        ),
+        # Its watermarker (perth) imports pkg_resources, which setuptools 81 removed.
+        "tts-chatterbox": _speech_runtime(
+            "tts-chatterbox", "Chatterbox", "chatterbox-tts", "setuptools<81"
+        ),
+        # torchaudio 2.9+ reads audio through torchcodec, which needs system FFmpeg libraries.
+        "tts-f5": _speech_runtime("tts-f5", "F5-TTS", "f5-tts", *OLD_TORCHAUDIO),
+        "tts-xtts": _speech_runtime("tts-xtts", "Coqui XTTS", "coqui-tts", *OLD_TORCHAUDIO),
+        "tts-qwen": _speech_runtime("tts-qwen", "Qwen3-TTS", "qwen-tts"),
+    }
+)
 
 
 @dataclass
@@ -127,6 +172,12 @@ class EngineManager:
     def python(self, engine: str) -> Path:
         v = self.venv(engine)
         return v / "Scripts" / "python.exe" if os.name == "nt" else v / "bin" / "python"
+
+    @staticmethod
+    def runtime(engine: str, variant: dict | None) -> str:
+        """The engine whose worker runs this model (itself, unless it names a runtime)."""
+        rt = ((variant or {}).get("engine_config") or {}).get("runtime")
+        return rt if rt in ENGINES else engine
 
     def model_dir(self, engine: str, tag: str) -> Path:
         return self.models_root / engine / tag
@@ -194,8 +245,9 @@ class EngineManager:
     async def _install(
         self, engine: str, variant: dict, state: PullState, hf_token: str | None = None
     ) -> None:
-        if not self.engine_installed(engine):
-            await self._install_engine(ENGINES[engine], state)
+        runtime = self.runtime(engine, variant)
+        if not self.engine_installed(runtime):
+            await self._install_engine(ENGINES[runtime], state)
         await self._download_model(engine, variant, state, hf_token)
         state.status = "success"
 
@@ -226,11 +278,12 @@ class EngineManager:
             "--progress-bar",
             "off",
         ]
-        if spec.needs_torch and not upgrade:
-            index = self.torch_index_url if self.gpu else "https://download.pytorch.org/whl/cpu"
+        index = self.torch_index_url if self.gpu else "https://download.pytorch.org/whl/cpu"
+        if spec.needs_torch and not upgrade and not spec.torch_pinned:
             await self._run(state, [*pip, "torch", "--index-url", index], spec.name)
         packages = list(spec.packages) + (list(spec.gpu_packages) if self.gpu else [])
-        await self._run(state, [*pip, *packages], spec.name)
+        extra = ["--extra-index-url", index] if spec.torch_pinned else []
+        await self._run(state, [*pip, *packages, *extra], spec.name)
         self._marker(spec.id).write_text(json.dumps({"version": spec.version, "gpu": self.gpu}))
 
     async def _run(self, state: PullState, cmd: list[str], label: str | None = None) -> None:
@@ -262,9 +315,10 @@ class EngineManager:
         env = dict(os.environ, HF_HUB_DISABLE_TELEMETRY="1")
         if hf_token:
             env["HF_TOKEN"] = hf_token
+        runtime = self.runtime(engine, variant)
         proc = await asyncio.create_subprocess_exec(
-            str(self.python(engine)),
-            str(WORKER_DIR / ENGINES[engine].worker),
+            str(self.python(runtime)),
+            str(WORKER_DIR / ENGINES[runtime].worker),
             "download",
             "--spec",
             json.dumps(cfg["source"]),
@@ -303,6 +357,7 @@ class EngineManager:
 
     async def delete_model(self, engine: str, tag: str) -> None:
         await self.stop_worker(engine)
+        await self.stop_worker(self.runtime(engine, self.installed_variant(engine, tag)))
         for d in (self.model_dir(engine, tag), self.model_dir(engine, tag + ".partial")):
             if d.exists():
                 await asyncio.to_thread(shutil.rmtree, d)

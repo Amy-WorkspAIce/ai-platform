@@ -89,7 +89,11 @@ const VOICE_LANG: Record<string, string> = {
 
 export function describeVoice(id: string): { name: string; language: string; gender: string } {
   const m = id.match(/^([a-z])([fm])_(.+)$/);
-  if (!m) return { name: id, language: "Other", gender: "" };
+  if (!m || !VOICE_LANG[m[1]]) {
+    // Other engines name voices freely ("Ana Florence", "ryan", "v2/en_speaker_3").
+    const name = id.split("/").pop()!.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return { name, language: "Voices", gender: "" };
+  }
   const name = m[3].replace(/(^|_)(\w)/g, (_, sep: string, c: string) => (sep ? " " : "") + c.toUpperCase());
   return { name, language: VOICE_LANG[m[1]] ?? "Other", gender: m[2] === "f" ? "Female" : "Male" };
 }

@@ -255,9 +255,12 @@ async def speech(request: Request, body: SpeechRequest) -> Response:
 @api.get("/audio/voices")
 async def voices(request: Request, model: str) -> dict:
     try:
-        model_dir, _ = studio.resolve(request.app, model, "audio", "speech")
-        resp = await request.app.state.engines.call(
-            "audio", "/voices", {"model_dir": str(model_dir)}
+        model_dir, variant = studio.resolve(request.app, model, "audio", "speech")
+        engines = request.app.state.engines
+        resp = await engines.call(
+            engines.runtime("audio", variant),
+            "/voices",
+            {"model_dir": str(model_dir), "config": variant["engine_config"]},
         )
     except StudioError as exc:
         raise http_error(exc) from exc

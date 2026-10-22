@@ -72,7 +72,14 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 
 Installing a catalog model that needs an engine (image, audio) also installs that engine
 the first time: a virtualenv in `/data/engines/<engine>` with its Python packages (several
-GB for the image engine because of PyTorch). Job status shows each phase.
+GB for the image engine because of PyTorch). Job status shows each phase. Hugging Face
+speech models (`{"model": "<repo>", "engine": "audio"}`) install the speech runtime their
+library needs (`tts-chatterbox`, `tts-xtts`...; see architecture.md).
+
+GGUF repos on Hugging Face that are **gated** (`hf.co/<repo>:<quant>`) can't be pulled by
+Ollama, which has no way to send a token. Amy downloads the file with your Hugging Face token
+instead, hands it to Ollama (`/api/blobs`, `/api/create`) and deletes its copy. Quantizations
+split into several files aren't supported.
 
 After a download finishes, the platform loads the model once and generates a single
 token. On some GPUs, the first run compiles CUDA kernels, which can take minutes. Doing

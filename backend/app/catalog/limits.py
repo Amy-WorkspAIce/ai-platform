@@ -190,6 +190,46 @@ RULES: list[tuple[re.Pattern, list[tuple[str, str]]]] = [
         ],
     ),
     (
+        re.compile(r"xtts", re.I),
+        [
+            (
+                "license",
+                "Coqui Public Model License: non-commercial use only (Coqui closed, so a "
+                "commercial license can't be bought).",
+            )
+        ],
+    ),
+    (
+        re.compile(r"chatterbox", re.I),
+        [
+            (
+                "quality",
+                "Adds an inaudible watermark to everything it says (Resemble AI's Perth), so "
+                "the audio can be identified as AI-made.",
+            )
+        ],
+    ),
+    (
+        re.compile(r"\bbark", re.I),
+        [
+            (
+                "quality",
+                "Can add laughter, music or noises and sometimes drifts off script; short "
+                "sentences work best.",
+            )
+        ],
+    ),
+    (
+        re.compile(r"f5-tts|e2-tts", re.I),
+        [
+            (
+                "quality",
+                "Speaks in the voice of a short reference clip (Amy uses its bundled sample) "
+                "and is slower than other engines.",
+            )
+        ],
+    ),
+    (
         re.compile(r"kokoro", re.I),
         [
             (
@@ -211,8 +251,12 @@ def limits_for(family: dict) -> list[dict]:
     for pattern, limits in RULES:
         if pattern.search(key):
             out += limits
-    if set(family.get("use_cases") or []) == {"embedding"}:
+    uses = set(family.get("use_cases") or [])
+    if uses == {"embedding"}:
         out = [lim for lim in out if lim[0] == "license"]  # embeddings don't write anything
+    elif uses and uses <= {"speech", "transcription"}:
+        # A voice model from a chat family (Qwen3-TTS) doesn't share the chat model's refusals.
+        out = [lim for lim in out if lim[0] != "content"]
     if UNCENSORED.search(key):
         out = [lim for lim in out if lim[0] != "content"]
         out.insert(
