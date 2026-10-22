@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Api, type GalleryAudio, type GalleryImage, type GalleryVideo, type VideoJob } from "../api";
 import { useBlobUrls } from "../blobs";
 import { AudioView, VideoJobView } from "../media";
+import { describeVoice } from "../devices";
 
 type Tab = "images" | "videos" | "audio";
 
@@ -131,7 +132,7 @@ export function LibraryView({ api, onNewChat }: { api: Api; onNewChat: () => voi
               <p className="clip-prompt">{a.text}</p>
               <div className="audio-row">
                 <AudioView api={api} id={a.id} />
-                <span className="muted small">{a.params.voice}</span>
+                <span className="muted small">{a.params.voice_name ?? describeVoice(a.params.voice).name}</span>
                 <button className="link danger" onClick={() => remove("audio", a.id)}>
                   Delete
                 </button>

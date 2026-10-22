@@ -125,6 +125,8 @@ ENGINES.update(
         "tts-f5": _speech_runtime("tts-f5", "F5-TTS", "f5-tts", *OLD_TORCHAUDIO),
         "tts-xtts": _speech_runtime("tts-xtts", "Coqui XTTS", "coqui-tts", *OLD_TORCHAUDIO),
         "tts-qwen": _speech_runtime("tts-qwen", "Qwen3-TTS", "qwen-tts"),
+        "tts-omnivoice": _speech_runtime("tts-omnivoice", "OmniVoice", "omnivoice"),
+        "tts-voxcpm": _speech_runtime("tts-voxcpm", "VoxCPM", "voxcpm", *OLD_TORCHAUDIO),
     }
 )
 

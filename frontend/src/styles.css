@@ -512,3 +512,21 @@ button.risky { color: var(--ink-muted); }
 .voice { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .voice > span:nth-child(2) { flex: 1; }
 .voice.selected { border-color: var(--cyan); }
+
+/* Custom voices */
+.custom-voices { list-style: none; padding: 0; margin: 0.4rem 0 0.8rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.custom-voice { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; }
+.custom-voice-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.custom-voice-name { flex: 1; min-width: 8rem; }
+.custom-voice-words { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
+.custom-voice-edit { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; }
+.custom-voice-edit button { align-self: flex-start; }
+.icon-button.placeholder { visibility: hidden; }
+.add-voice { display: flex; flex-direction: column; gap: 0.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem; }
+.add-voice .field { display: flex; flex-direction: column; gap: 0.25rem; }
+.add-voice audio { width: 100%; max-width: 420px; }
+.add-voice > button { align-self: flex-start; display: inline-flex; align-items: center; gap: 0.35rem; }
+.read-aloud { margin: 0; padding: 0.5rem 0.75rem; border-left: 3px solid var(--magenta); background: var(--surface); font-size: 1.02rem; line-height: 1.5; }
+.row-actions { display: flex; align-items: center; gap: 0.75rem; }
+
+.add-voice-button { align-self: flex-start; }

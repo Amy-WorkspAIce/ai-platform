@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS images (
     params TEXT NOT NULL,
     created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS voices (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,           -- 'clone' (a recorded sample) or 'design' (described)
+    description TEXT,
+    transcript TEXT,
+    seconds REAL,
+    created_at REAL NOT NULL
+);
 """
 
 
@@ -285,6 +294,56 @@ class Database:
     def delete_audio(self, audio_id: str) -> bool:
         with self.connect() as db:
             return db.execute("DELETE FROM audio WHERE id = ?", (audio_id,)).rowcount > 0
+
+    # ---- custom voices ----
+
+    def add_voice(
+        self,
+        name: str,
+        kind: str,
+        description: str | None = None,
+        transcript: str | None = None,
+        seconds: float | None = None,
+        voice_id: str | None = None,
+    ) -> dict:
+        row = {
+            "id": voice_id or new_id(),
+            "name": name,
+            "kind": kind,
+            "description": description,
+            "transcript": transcript,
+            "seconds": seconds,
+            "created_at": time.time(),
+        }
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO voices VALUES (:id, :name, :kind, :description, :transcript, "
+                ":seconds, :created_at)",
+                row,
+            )
+        return row
+
+    def list_voices(self) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM voices ORDER BY created_at").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_voice(self, voice_id: str) -> dict | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
+        return dict(row) if row else None
+
+    def update_voice(self, voice_id: str, **fields) -> dict | None:
+        fields = {k: v for k, v in fields.items() if k in ("name", "description", "transcript")}
+        if fields:
+            sets = ", ".join(f"{k} = :{k}" for k in fields)
+            with self.connect() as db:
+                db.execute(f"UPDATE voices SET {sets} WHERE id = :id", fields | {"id": voice_id})  # noqa: S608 - fixed column names
+        return self.get_voice(voice_id)
+
+    def delete_voice(self, voice_id: str) -> bool:
+        with self.connect() as db:
+            return db.execute("DELETE FROM voices WHERE id = ?", (voice_id,)).rowcount > 0
 
     # ---- folders ----
 

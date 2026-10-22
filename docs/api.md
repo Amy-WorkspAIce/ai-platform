@@ -61,7 +61,12 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | PUT | `/api/settings/web` | `{"enabled": bool}`: allow web access in chats. |
 | PUT | `/api/settings/voice` | `{"voice": "bm_george"|null}`: the default text-to-speech voice (used when a request names none). |
 | GET/DELETE | `/api/images/{id}` | Fetch the PNG, or delete it. |
-| GET | `/api/audio/voices?model=audio/kokoro-82m` | Voices for a text-to-speech model. |
+| GET | `/api/audio/voices?model=audio/kokoro-82m` | A text-to-speech model's voices: `voices` (built in), `accepts` (`clone` and/or `design`: the kinds of custom voice it can use), `needs_text` (clones need a transcript) and `custom` (the user's voices it can speak in). |
+| GET | `/api/voices` | Custom voices: `id` (`custom:<id>`, used as `voice` anywhere), `name`, `kind` (`clone` or `design`), `description`, `transcript`, `seconds`. |
+| POST | `/api/voices` | Add one (multipart): `name`, `kind`; for `design` a `description`; for `clone` a WAV `file` (16-bit PCM, 3 to 60 s) and ideally its `transcript`. Without a transcript, the installed speech-to-text model writes one (`transcribed: true`). |
+| POST | `/api/voices/from-speech` | `{"name", "model", "voice", "text"?}`: speak a sentence with an installed model's built-in voice and keep it as a sample (for models that only copy voices, such as Qwen3-TTS Base). |
+| PATCH/DELETE | `/api/voices/{id}` | Rename, change the description or transcript (`""` clears it), or delete. Deleting the default voice resets the default. |
+| GET | `/api/voices/{id}/sample` | A clone's WAV sample. |
 | GET | `/api/videos/jobs` | Video jobs with live progress (`phase`, `step`, `steps`, `status`, `error`). |
 | GET | `/api/videos` | Video gallery. |
 | GET/DELETE | `/api/videos/{id}` | Fetch the MP4, or delete it. |

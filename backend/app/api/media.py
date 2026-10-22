@@ -6,6 +6,7 @@
 - ``POST /v1/audio/speech``          text-to-speech (returns audio bytes)
 - ``/api/images``, ``/api/videos``, ``/api/audio``: the library (list, fetch, delete)
 - ``POST /api/images/upload``        add your own image (e.g. for the chat to edit)
+- ``/api/voices``                    custom voices: recorded samples and described voices
 """
 
 import time
@@ -17,6 +18,8 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from app import studio
+from app import voices as custom
+from app.delegation import choose
 from app.security import require_api_key
 from app.studio import StudioError
 
@@ -254,6 +257,8 @@ async def speech(request: Request, body: SpeechRequest) -> Response:
 
 @api.get("/audio/voices")
 async def voices(request: Request, model: str) -> dict:
+    """A model's built-in voices, plus the custom voices it can speak in (``custom``) and
+    which kinds of custom voice it accepts."""
     try:
         model_dir, variant = studio.resolve(request.app, model, "audio", "speech")
         engines = request.app.state.engines
@@ -266,7 +271,149 @@ async def voices(request: Request, model: str) -> dict:
         raise http_error(exc) from exc
     except studio.EngineError as exc:
         raise HTTPException(502, str(exc)) from exc
-    return resp.json()
+    info = resp.json()
+    return {
+        "voices": info["voices"],
+        "accepts": info.get("accepts", []),
+        "needs_text": info.get("needs_text", False),
+        "custom": custom.usable(request.app, info),
+    }
+
+
+# ---- custom voices ----
+
+
+def _voice_or_404(request: Request, voice_id: str) -> dict:
+    stored = request.app.state.db.get_voice(voice_id.removeprefix(custom.PREFIX))
+    if stored is None:
+        raise HTTPException(404, "Voice not found")
+    return stored
+
+
+async def _transcribe_clip(request: Request, path: Path) -> str | None:
+    """What a sample says, if a speech-to-text model is installed (else None)."""
+    model = choose(request.app, "transcription")
+    if model is None:
+        return None
+    try:
+        result = await studio.transcribe_file(request.app, model["id"], path)
+    except StudioError:
+        return None
+    return (result.get("text") or "").strip() or None
+
+
+@api.get("/voices")
+def list_voices(request: Request) -> list[dict]:
+    return [custom.public(v) for v in request.app.state.db.list_voices()]
+
+
+@api.post("/voices", status_code=201)
+async def create_voice(
+    request: Request,
+    name: str = Form(..., min_length=1, max_length=60),
+    kind: str = Form(...),
+    description: str | None = Form(None, max_length=500),
+    transcript: str | None = Form(None, max_length=2000),
+    file: UploadFile | None = File(None),
+) -> dict:
+    """Add a voice: ``kind=design`` with a ``description``, or ``kind=clone`` with a WAV
+    ``file`` (3 to 60 seconds) and ideally its ``transcript``. Without a transcript, the
+    installed speech-to-text model (if any) writes one."""
+    db = request.app.state.db
+    if kind == "design":
+        if not (description or "").strip():
+            raise HTTPException(400, "Describe the voice")
+        voice = db.add_voice(name.strip(), "design", description=description.strip())
+        return custom.public(voice)
+    if kind != "clone":
+        raise HTTPException(400, "kind must be clone or design")
+    if file is None:
+        raise HTTPException(400, "Add a voice sample (a WAV file)")
+    data = await read_limited(file, custom.MAX_BYTES)
+    try:
+        seconds = custom.wav_seconds(data)
+    except custom.VoiceError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    voice_id = uuid.uuid4().hex
+    path = custom.clip_path(request.app, voice_id)
+    path.write_bytes(data)
+    given = (transcript or "").strip() or None
+    text = given or await _transcribe_clip(request, path)
+    voice = db.add_voice(name.strip(), "clone", transcript=text, seconds=seconds, voice_id=voice_id)
+    return custom.public(voice) | {"transcribed": bool(text and not given)}
+
+
+SAMPLE_TEXT = (
+    "Hello there. This is the voice I would like you to use. It is warm and clear, "
+    "and it speaks at an easy, natural pace."
+)
+
+
+class VoiceFromSpeech(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    model: str
+    voice: str | None = None
+    text: str = Field(default=SAMPLE_TEXT, min_length=10, max_length=500)
+
+
+@api.post("/voices/from-speech", status_code=201)
+async def voice_from_speech(request: Request, body: VoiceFromSpeech) -> dict:
+    """Make a voice sample by speaking a sentence with one of an installed model's voices
+    (useful for models that only speak in a sample's voice, such as Qwen3-TTS Base)."""
+    if body.voice and body.voice.startswith(custom.PREFIX):
+        raise HTTPException(400, "Choose a built-in voice to make a sample from")
+    try:
+        audio = await studio.speak(request.app, body.model, body.text, body.voice or None)
+        seconds = custom.wav_seconds(audio)
+    except StudioError as exc:
+        raise http_error(exc) from exc
+    except custom.VoiceError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    voice_id = uuid.uuid4().hex
+    custom.clip_path(request.app, voice_id).write_bytes(audio)
+    voice = request.app.state.db.add_voice(
+        body.name.strip(), "clone", transcript=body.text, seconds=seconds, voice_id=voice_id
+    )
+    return custom.public(voice)
+
+
+class VoiceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    description: str | None = Field(default=None, min_length=1, max_length=500)
+    transcript: str | None = Field(default=None, max_length=2000)  # "" clears it
+
+
+@api.patch("/voices/{voice_id}")
+def update_voice(request: Request, voice_id: str, body: VoiceUpdate) -> dict:
+    stored = _voice_or_404(request, voice_id)
+    fields = body.model_dump(exclude_unset=True)
+    if "transcript" in fields:
+        fields["transcript"] = (fields["transcript"] or "").strip() or None
+    for key in ("name", "description"):
+        if key in fields:
+            if not (fields[key] or "").strip():
+                raise HTTPException(400, f"{key.capitalize()} can't be empty")
+            fields[key] = fields[key].strip()
+    return custom.public(request.app.state.db.update_voice(stored["id"], **fields))
+
+
+@api.delete("/voices/{voice_id}", status_code=204)
+def delete_voice(request: Request, voice_id: str) -> None:
+    stored = _voice_or_404(request, voice_id)
+    request.app.state.db.delete_voice(stored["id"])
+    custom.clip_path(request.app, stored["id"]).unlink(missing_ok=True)
+    us = request.app.state.user_settings
+    if us.voice == custom.PREFIX + stored["id"]:
+        us.set_voice(None)
+
+
+@api.get("/voices/{voice_id}/sample")
+def voice_sample(request: Request, voice_id: str) -> FileResponse:
+    stored = _voice_or_404(request, voice_id)
+    path = custom.clip_path(request.app, stored["id"])
+    if stored["kind"] != "clone" or not path.exists():
+        raise HTTPException(404, "This voice has no sample")
+    return FileResponse(path, media_type="audio/wav")
 
 
 @api.get("/audio")

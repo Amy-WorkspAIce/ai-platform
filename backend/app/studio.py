@@ -13,7 +13,7 @@ import time
 import uuid
 from pathlib import Path
 
-from app import catalog
+from app import catalog, voices
 from app.engines import EngineError
 
 log = logging.getLogger(__name__)
@@ -289,6 +289,7 @@ async def speak(
                 "speed": speed,
                 "format": fmt,
                 "config": variant["engine_config"],
+                "profile": voices.profile(app, voice),
             },
         )
     except EngineError as exc:
@@ -304,9 +305,10 @@ async def speak_to_library(
     audio_id = uuid.uuid4().hex
     (data_dir(app, "audio") / f"{audio_id}.wav").write_bytes(audio)
     tag = model.removeprefix("audio/")
-    return app.state.db.add_audio(
-        audio_id, f"audio/{tag}", text, {"voice": voice or "af_heart", "speed": speed}
-    )
+    params = {"voice": voice or "af_heart", "speed": speed}
+    if stored := voices.get(app, voice):
+        params["voice_name"] = stored["name"]
+    return app.state.db.add_audio(audio_id, f"audio/{tag}", text, params)
 
 
 async def transcribe_file(app, model: str, path: Path, language: str | None = None) -> dict:

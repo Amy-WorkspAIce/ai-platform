@@ -111,3 +111,43 @@ export function sampleText(id: string): string {
   };
   return samples[id[0]] ?? `Hi, I'm ${describeVoice(id).name}, one of Amy's voices.`;
 }
+
+/**
+ * Turn any recording or audio file the browser can play into a mono 16-bit WAV (what the
+ * speech engines read), at most ``maxSeconds`` long. Returns the WAV and its length.
+ */
+export async function toWav(audio: Blob, maxSeconds = 30, rate = 24000): Promise<{ wav: Blob; seconds: number; trimmed: boolean }> {
+  const ctx = new AudioContext();
+  let decoded: AudioBuffer;
+  try {
+    decoded = await ctx.decodeAudioData(await audio.arrayBuffer());
+  } finally {
+    void ctx.close();
+  }
+  const trimmed = decoded.duration > maxSeconds;
+  const seconds = Math.min(decoded.duration, maxSeconds);
+  const offline = new OfflineAudioContext(1, Math.ceil(seconds * rate), rate);
+  const src = offline.createBufferSource();
+  src.buffer = decoded;
+  src.connect(offline.destination); // mixes the channels down to mono
+  src.start();
+  const samples = (await offline.startRendering()).getChannelData(0);
+
+  const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const text = (at: number, s: string) => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  text(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  text(8, "WAVE");
+  text(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  samples.forEach((x, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x)) * 0x7fff, true));
+  return { wav: new Blob([view], { type: "audio/wav" }), seconds, trimmed };
+}

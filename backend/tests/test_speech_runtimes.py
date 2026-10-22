@@ -19,6 +19,12 @@ def test_runtime_is_picked_from_the_library():
     assert speech.runtime_for(listing("SWivid/E2-TTS", "f5-tts")) is None  # other shape
     assert speech.runtime_for(listing("coqui/XTTS-v2", "coqui")) == "tts-xtts"
     assert speech.runtime_for(listing("Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")) == "tts-qwen"
+    assert speech.runtime_for(listing("Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign")) == "tts-qwen"
+    assert speech.runtime_for(listing("Qwen/Qwen3-TTS-12Hz-0.6B-Base")) == "tts-qwen"
+    assert speech.runtime_for(listing("Qwen/Qwen3-TTS-Tokenizer-12Hz")) is None
+    assert speech.runtime_for(listing("k2-fsa/OmniVoice", "omnivoice")) == "tts-omnivoice"
+    assert speech.runtime_for(listing("openbmb/VoxCPM2", "voxcpm")) == "tts-voxcpm"
+    assert speech.runtime_for(listing("Serveurperso/OmniVoice-GGUF", "gguf")) is None
     vits = listing("facebook/mms-tts-eng", "transformers", ["transformers", "vits"])
     assert speech.runtime_for(vits) == "tts-transformers"
     # transformers alone isn't enough: VibeVoice etc. need custom code.
@@ -28,11 +34,19 @@ def test_runtime_is_picked_from_the_library():
 
 def test_unsupported_models_say_why():
     assert "Kokoro 82M" in speech.unsupported_reason(listing("hexgrad/Kokoro-82M"))
-    assert "omnivoice library" in speech.unsupported_reason(
-        listing("k2-fsa/OmniVoice", "omnivoice")
-    )
+    assert "sanotts library" in speech.unsupported_reason(listing("ampixa/sanoTTS", "sanotts"))
     fam = live.hf_family(listing("coqui/XTTS-v2", "coqui"), "speech", False)
     assert fam["unsupported"] is None and fam["runtime"] == "tts-xtts"
+    assert "copy a voice from your sample" in fam["description"]
+
+
+def test_descriptions_say_what_voices_a_model_offers():
+    design = live.hf_family(listing("Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"), "speech", False)
+    assert "voices you describe in words" in design["description"]
+    base = live.hf_family(listing("Qwen/Qwen3-TTS-12Hz-0.6B-Base"), "speech", False)
+    assert "copied from your sample" in base["description"]
+    custom = live.hf_family(listing("Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"), "speech", False)
+    assert "sample" not in custom["description"]
 
 
 def test_audio_spec_for_a_speech_model():

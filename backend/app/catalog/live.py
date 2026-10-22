@@ -278,8 +278,10 @@ def _half_precision_gb(model: dict) -> float | None:
     return round(total * 2 / 1e9, 2) if total else None
 
 
-def describe_hf(kind: str | None, likes: int) -> str:
+def describe_hf(kind: str | None, likes: int, extra: str | None = None) -> str:
     parts = [kind] if kind else []
+    if extra:
+        parts.append(extra)
     parts.append(f"{likes:,} likes on Hugging Face")
     return " · ".join(parts)
 
@@ -330,7 +332,9 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "license": card.get("license"),
         "tags": [t for t in tags if t == "not-for-all-audiences"],
         "description": describe_hf(
-            diffusers_cls or model.get("pipeline_tag"), model.get("likes", 0)
+            diffusers_cls or model.get("pipeline_tag"),
+            model.get("likes", 0),
+            speech.voice_style(model) if category == "speech" else None,
         ),
         "engine": engine,
         "source": "huggingface",

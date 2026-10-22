@@ -37,7 +37,9 @@ call, and it can act on those apps through their APIs.
 - **ChatGPT-style chat** with saved conversations in collapsible folders (drag and drop),
   streaming, markdown, collapsible "thinking" for reasoning models, dictation (the mic button,
   with Whisper installed; browsers allow the microphone only over HTTPS or on localhost) and
-  read-aloud. Pick the voice (Kokoro comes with dozens), microphone and speakers in Settings.
+  read-aloud. Pick the voice (Kokoro comes with dozens), microphone and speakers in Settings,
+  and add **your own voices**: record or upload a short sample to copy a voice, or describe one
+  in words ("a calm older man with a deep voice"). Models that can use them pick them up.
 - **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …") and
   brings the relevant ones into new conversations. The Memory page lets you search, edit,
   add and delete them, or switch memory off. Secrets are never stored.
@@ -52,8 +54,9 @@ call, and it can act on those apps through their APIs.
 - **Image and video generation**: FLUX.2 klein, SDXL, Z-Image Turbo, SD 1.5, any diffusers
   model from Hugging Face; Wan 2.1 and LTX-Video for clips (rendered as background jobs).
   Galleries for both. Plus **audio**: transcription (Whisper) and text-to-speech: Kokoro, plus
-  Hugging Face voice models that need their own library (Chatterbox, XTTS, F5-TTS, Qwen3-TTS,
-  MMS, Bark), each installed into its own environment the first time. The engines
+  Hugging Face voice models that need their own library (Chatterbox, XTTS, F5-TTS, Qwen3-TTS
+  CustomVoice, VoiceDesign and Base, OmniVoice, VoxCPM2, MMS, Bark), each installed into its
+  own environment the first time. The engines
   these need (PyTorch/diffusers, faster-whisper, ONNX) install themselves into `/data` the
   first time you install such a model, so the base image stays lean.
 - **OpenAI-compatible API** at `/v1`: chat, images, transcriptions and speech. Point any
@@ -125,6 +128,7 @@ print(reply.choices[0].message.content)
 - [x] Saved conversation history (sidebar chat list)
 - [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
 - [x] Speech runtimes: Chatterbox, XTTS, F5-TTS, Qwen3-TTS, MMS and Bark, each in its own venv; gated GGUF models imported into Ollama with your Hugging Face token
+- [x] Custom voices (recorded samples and described voices); Qwen3-TTS VoiceDesign and Base, OmniVoice, VoxCPM2
 - [x] Web access (search + page reading) and agent mode with approvals
 - [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)

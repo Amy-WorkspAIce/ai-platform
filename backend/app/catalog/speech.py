@@ -10,7 +10,13 @@ KOKORO_REPOS = ("hexgrad/kokoro-82m", "onnx-community/kokoro-82m")
 
 # Download sizes (GB) of the files Amy fetches, measured, for repos whose listing has no
 # safetensors size (so the Models page can show a size and a fit before install).
-KNOWN_GB = {"coqui/xtts-v2": 2.09, "resembleai/chatterbox": 3.19, "swivid/f5-tts": 1.4}
+KNOWN_GB = {
+    "coqui/xtts-v2": 2.09,
+    "resembleai/chatterbox": 3.19,
+    "swivid/f5-tts": 1.4,
+    "k2-fsa/omnivoice": 3.27,
+    "openbmb/voxcpm2": 4.96,
+}
 
 # Runtime engine id -> what it runs, for messages.
 RUNTIMES = {
@@ -19,6 +25,8 @@ RUNTIMES = {
     "tts-f5": "F5-TTS",
     "tts-xtts": "Coqui XTTS",
     "tts-qwen": "Qwen3-TTS",
+    "tts-omnivoice": "OmniVoice",
+    "tts-voxcpm": "VoxCPM",
 }
 
 
@@ -33,10 +41,31 @@ def runtime_for(model: dict) -> str | None:
         return "tts-f5"  # fine-tunes and E2-TTS use other model shapes
     if lib == "coqui" and "xtts" in repo:
         return "tts-xtts"
-    if (lib == "qwen-tts" or repo.startswith("qwen/qwen3-tts")) and "customvoice" in repo:
-        return "tts-qwen"  # Base and VoiceDesign models need a voice sample or description
+    if (lib == "qwen-tts" or repo.startswith("qwen/qwen3-tts")) and "tokenizer" not in repo:
+        return "tts-qwen"  # Base models clone a voice sample; VoiceDesign ones a description
+    if lib == "omnivoice":
+        return "tts-omnivoice"
+    if lib == "voxcpm":
+        return "tts-voxcpm"
     if lib == "transformers" and tags & {"vits", "bark"}:
         return "tts-transformers"
+    return None
+
+
+def voice_style(model: dict) -> str | None:
+    """What voices a supported model offers beyond its built-in ones, for its description."""
+    runtime = runtime_for(model)
+    repo = model["id"].lower()
+    if runtime == "tts-qwen":
+        if "voicedesign" in repo:
+            return "speaks in voices you describe in words"
+        if "base" in repo:
+            return "speaks in a voice copied from your sample"
+        return None
+    if runtime in ("tts-omnivoice", "tts-voxcpm"):
+        return "voices you describe or copy from a sample"
+    if runtime in ("tts-xtts", "tts-chatterbox", "tts-f5"):
+        return "can copy a voice from your sample"
     return None
 
 
@@ -45,11 +74,6 @@ def unsupported_reason(model: dict) -> str | None:
     if runtime_for(model):
         return None
     repo = model["id"].lower()
-    if repo.startswith("qwen/qwen3-tts"):
-        return (
-            "Needs a voice sample or description, which Amy can't give it yet "
-            "(Qwen3-TTS CustomVoice models work)."
-        )
     if repo.startswith(KOKORO_REPOS):
         return "This is Kokoro: install Kokoro 82M from the recommended models (same voices)."
     lib = model.get("library_name")

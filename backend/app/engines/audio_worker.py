@@ -81,6 +81,8 @@ def speak(body: dict) -> common.Response:
     voice = body.get("voice") or "af_heart"
     with _lock:
         kokoro = _kokoro_model(body["model_dir"])
+        if voice not in kokoro.get_voices():
+            voice = "af_heart"  # the saved default may be another model's voice
         samples, rate = kokoro.create(
             body["text"],
             voice=voice,

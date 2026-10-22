@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Api, getPref, setPref, type AppSettings } from "../api";
+import { Api, getPref, setPref, type AppSettings, type ModelVoices } from "../api";
 import {
   MIC_PREF,
   SPEAKER_PREF,
@@ -12,6 +12,7 @@ import {
 } from "../devices";
 import { Icon } from "../icons";
 import { canRecord } from "../recorder";
+import { CustomVoices, acceptsText } from "./CustomVoices";
 
 type Props = { api: Api; onChanged?: () => void; onSignOut: () => void };
 
@@ -320,6 +321,8 @@ function DefaultModels({
   );
 }
 
+const YOURS = "Your voices";
+
 function VoiceAndDevices({
   api,
   settings,
@@ -331,7 +334,7 @@ function VoiceAndDevices({
 }) {
   const speech = settings.models.speech;
   const model = speech.pinned ?? speech.best;
-  const [voices, setVoices] = useState<string[] | null>(null);
+  const [info, setInfo] = useState<ModelVoices | null>(null);
   const [lang, setLang] = useState("");
   const [playing, setPlaying] = useState("");
   const [error, setError] = useState("");
@@ -339,27 +342,33 @@ function VoiceAndDevices({
   const [mic, setMic] = useDevicePref(MIC_PREF);
   const [speaker, setSpeaker] = useDevicePref(SPEAKER_PREF);
 
-  useEffect(() => {
+  const loadVoices = () => {
     if (!model) return;
     api
       .voices(model)
-      .then((r) => setVoices(r.voices))
+      .then(setInfo)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [api, model]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadVoices, [api, model]);
 
-  const current = settings.voice ?? "af_heart";
+  const voices = info?.voices ?? null;
+  const own = new Map((info?.custom ?? []).map((v) => [v.id, v]));
+  const current = settings.voice ?? info?.voices[0] ?? "af_heart";
+  const label = (v: string) => (own.has(v) ? { name: own.get(v)!.name, language: YOURS, gender: "" } : describeVoice(v));
   const byLang = new Map<string, string[]>();
-  for (const v of voices ?? []) {
-    const l = describeVoice(v).language;
+  for (const v of [...(voices ?? []), ...own.keys()]) {
+    const l = label(v).language;
     byLang.set(l, [...(byLang.get(l) ?? []), v]);
   }
-  const shownLang = lang || describeVoice(current).language;
+  const shownLang = byLang.has(lang) ? lang : byLang.has(label(current).language) ? label(current).language : [...byLang.keys()][0];
 
   async function preview(voice: string) {
     if (!model) return;
     setPlaying(voice);
     try {
-      const url = URL.createObjectURL(await api.speak(model, sampleText(voice), voice));
+      const text = own.has(voice) ? `Hi, I'm ${own.get(voice)!.name}, one of your voices.` : sampleText(voice);
+      const url = URL.createObjectURL(await api.speak(model, text, voice));
       const a = new Audio(url);
       routeAudio(a);
       a.onended = () => {
@@ -393,8 +402,9 @@ function VoiceAndDevices({
       ) : (
         <>
           <p className="muted small">
-            Used for <strong>Read aloud</strong> and when chat speaks. All {voices.length} voices come with the model, so
-            there's nothing extra to download. Press play to hear one.
+            Used for <strong>Read aloud</strong> and when chat speaks.{" "}
+            {voices.length > 0 && `The model comes with ${voices.length} voice${voices.length === 1 ? "" : "s"}, so there's nothing extra to download. `}
+            Press play to hear one. {info && acceptsText(info)}
           </p>
           <div className="segmented wrap" role="radiogroup" aria-label="Language">
             {[...byLang.keys()].map((l) => (
@@ -405,7 +415,7 @@ function VoiceAndDevices({
           </div>
           <div className="voice-grid">
             {(byLang.get(shownLang) ?? []).map((v) => {
-              const d = describeVoice(v);
+              const d = label(v);
               return (
                 <div key={v} className={`voice ${v === current ? "selected" : ""}`}>
                   <button className="icon-button" title={`Hear ${d.name}`} disabled={!!playing} onClick={() => void preview(v)}>
@@ -413,7 +423,7 @@ function VoiceAndDevices({
                   </button>
                   <span>
                     <strong>{d.name}</strong>
-                    <span className="muted small"> {d.gender}</span>
+                    <span className="muted small"> {d.gender || (own.has(v) ? (own.get(v)!.kind === "clone" ? "Sample" : "Described") : "")}</span>
                   </span>
                   {v === current ? (
                     <span className="tag tools">In use</span>
@@ -428,6 +438,13 @@ function VoiceAndDevices({
           </div>
         </>
       )}
+
+      <CustomVoices
+        api={api}
+        speech={speech}
+        usable={info ? new Set(own.keys()) : null}
+        onChanged={loadVoices}
+      />
 
       <h3 className="setting-sub">Microphone and speakers</h3>
       {!devices.supported ? (

@@ -188,7 +188,35 @@ export class Api {
     return resp.blob();
   }
   voices = (model: string) =>
-    this.request<{ voices: string[] }>(`/api/audio/voices?model=${encodeURIComponent(model)}`);
+    this.request<ModelVoices>(`/api/audio/voices?model=${encodeURIComponent(model)}`);
+
+  // ---- custom voices ----
+  customVoices = () => this.request<CustomVoice[]>("/api/voices");
+  /** A recorded sample (WAV) or a described voice. */
+  addVoice(fields: { name: string; kind: "clone" | "design"; description?: string; transcript?: string; sample?: Blob }) {
+    const form = new FormData();
+    form.append("name", fields.name);
+    form.append("kind", fields.kind);
+    if (fields.description) form.append("description", fields.description);
+    if (fields.transcript) form.append("transcript", fields.transcript);
+    if (fields.sample) form.append("file", fields.sample, "sample.wav");
+    return this.request<CustomVoice>("/api/voices", { method: "POST", body: form });
+  }
+  voiceFromSpeech = (name: string, model: string, voice: string) =>
+    this.request<CustomVoice>("/api/voices/from-speech", {
+      method: "POST",
+      body: JSON.stringify({ name, model, voice }),
+    });
+  updateVoice = (id: string, fields: { name?: string; description?: string; transcript?: string }) =>
+    this.request<CustomVoice>(`/api/voices/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    });
+  deleteVoice = (id: string) =>
+    this.request<void>(`/api/voices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  async voiceSampleUrl(id: string): Promise<string> {
+    return URL.createObjectURL(await (await this.raw(`/api/voices/${encodeURIComponent(id)}/sample`)).blob());
+  }
 
   catalog = () => this.request<Catalog>("/api/catalog");
   installed = () => this.request<InstalledModel[]>("/api/models/installed");
@@ -355,7 +383,7 @@ export type GalleryAudio = {
   model: string;
   text: string;
   created_at: number;
-  params: { voice: string; speed: number };
+  params: { voice: string; speed: number; voice_name?: string };
 };
 
 export type Attachment =
@@ -598,4 +626,24 @@ export type PullState = {
   total: number;
   done: boolean;
   error: string | null;
+};
+
+/** One of the user's own voices: a recorded sample ("clone") or a described voice ("design"). */
+export type CustomVoice = {
+  id: string; // "custom:<id>"
+  name: string;
+  kind: "clone" | "design";
+  description: string | null;
+  transcript: string | null;
+  seconds: number | null;
+  created_at: number;
+  transcribed?: boolean;
+};
+
+/** A speech model's voices: built-in ones, and the user's voices it can speak in. */
+export type ModelVoices = {
+  voices: string[];
+  accepts: ("clone" | "design")[];
+  needs_text: boolean;
+  custom: CustomVoice[];
 };

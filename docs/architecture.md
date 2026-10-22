@@ -139,11 +139,23 @@ Hugging Face `library_name` and tags, and the files to download.
 | `tts-chatterbox` | chatterbox-tts | Resemble AI Chatterbox |
 | `tts-f5` | f5-tts, torch/torchaudio < 2.9 | F5-TTS (plus the Vocos vocoder) |
 | `tts-xtts` | coqui-tts, torch/torchaudio < 2.9 | Coqui XTTS v2 (58 built-in speakers) |
-| `tts-qwen` | qwen-tts | Qwen3-TTS CustomVoice |
+| `tts-qwen` | qwen-tts | Qwen3-TTS CustomVoice (9 speakers), VoiceDesign (described voices), Base (copies a sample) |
+| `tts-omnivoice` | omnivoice | k2-fsa OmniVoice (600+ languages; described or copied voices) |
+| `tts-voxcpm` | voxcpm, torch/torchaudio < 2.9 | OpenBMB VoxCPM2 (30 languages, 48 kHz; described or copied voices) |
 
 torchaudio 2.9+ decodes audio through torchcodec, which needs system FFmpeg libraries the
 image doesn't have, hence the pins. Models with a library Amy has no runtime for stay listed
 as "Not supported yet", with the library named.
+
+**Custom voices** (`app/voices.py`) are stored in the `voices` table, with clips in
+`/data/voices/<id>.wav`. They are chosen by id (`custom:<id>`) like built-in voices; when
+speaking, the platform sends the worker a `profile`: `{"kind": "clone", "audio", "text"}` or
+`{"kind": "design", "description"}`. Each backend's `/voices` says which kinds it accepts
+(`accepts`, `needs_text`), and only those voices are offered for that model; a backend given a
+profile it can't use falls back to a built-in voice. The browser converts recordings and
+uploads to 16-bit mono WAV before upload, so neither the platform nor the workers need
+FFmpeg. OmniVoice describes voices with a fixed vocabulary (gender, age, pitch, accent,
+whisper), so free descriptions are mapped onto it (`omni_tags`).
 
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB
