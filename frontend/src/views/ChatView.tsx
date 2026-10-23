@@ -16,6 +16,8 @@ import { routeAudio } from "../devices";
 import { canRecord, extensionFor, useRecorder } from "../recorder";
 import { Icon } from "../icons";
 
+const AUTO = "auto";
+
 type Props = {
   api: Api;
   conversationId: string | null;
@@ -27,6 +29,7 @@ type Props = {
   ttsModel?: string;
   onSaved: (id: string) => void;
   onBrowseModels: () => void;
+  onOpenRules?: (scope: string) => void;
 };
 
 type ToolStatus = "awaiting" | "running" | "ok" | "error";
@@ -146,6 +149,7 @@ export function ChatView({
   ttsModel,
   onSaved,
   onBrowseModels,
+  onOpenRules,
 }: Props) {
   const [model, setModel] = useState("");
   const [items, setItems] = useState<Item[]>([]);
@@ -165,6 +169,8 @@ export function ChatView({
   const sendCount = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  // The model the server picked last on Auto, so the chat only notes when it changes.
+  const autoPick = useRef("");
   const ids = models?.map((m) => m.id) ?? [];
   const modelInfo = models?.find((m) => m.id === model);
 
@@ -189,9 +195,9 @@ export function ChatView({
   }, [api, conversationId]);
 
   useEffect(() => {
-    if (!ids.length || ids.includes(model)) return;
-    const last = getPref("model");
-    setModel(ids.includes(last) ? last : ids[0]);
+    if (!ids.length || model === AUTO || ids.includes(model)) return;
+    const last = getPref("model") || AUTO;
+    setModel(last === AUTO || ids.includes(last) ? last : AUTO);
   }, [ids.join(","), model]);
 
   const refreshWorkspaces = () =>
@@ -230,6 +236,16 @@ export function ChatView({
 
   function onEvent(e: AgentEvent) {
     switch (e.type) {
+      case "model": {
+        if (e.model === autoPick.current) break;
+        const first = !autoPick.current;
+        autoPick.current = e.model;
+        const why = e.purpose === "coding" ? "the coding model" : "the chat model";
+        if (!first || e.purpose === "coding") {
+          setItems((prev) => [...prev, { kind: "notice", text: `Auto: answering with ${e.model.split("/").pop()}, ${why}` }]);
+        }
+        break;
+      }
       case "start":
         runId.current = e.run_id;
         if (!convId.current) {
@@ -267,7 +283,7 @@ export function ChatView({
         setBusy(false);
         break;
       case "memory": {
-        const verb = e.action === "remembered" ? "Remembered" : e.action === "updated" ? "Updated memory" : "Forgot";
+        const verb = { remembered: "Remembered", updated: "Updated memory", removed: "Forgot", failed: "Couldn't update memory" }[e.action];
         setItems((prev) => [...prev, { kind: "notice", text: `${verb}: ${e.text}`, memory: true }]);
         break;
       }
@@ -397,6 +413,11 @@ export function ChatView({
               setPref("workspace", name);
             }}
           />
+          {workspace && onOpenRules && (
+            <button type="button" className="link small" title="Rules Amy follows in this workspace" onClick={() => onOpenRules(`workspace:${workspace}`)}>
+              Rules
+            </button>
+          )}
           <label className="auto-approve" title="Run commands and edit files without asking">
             <input type="checkbox" checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} />
             Auto-approve
@@ -499,6 +520,7 @@ export function ChatView({
               setPref("model", e.target.value);
             }}
           >
+            <option value={AUTO}>Auto: picks the right model</option>
             {models?.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.id}

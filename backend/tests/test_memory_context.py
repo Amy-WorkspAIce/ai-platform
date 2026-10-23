@@ -138,6 +138,51 @@ def test_learns_facts_after_the_answer(client):
     assert "Has an RTX 2080 Ti" in llm2.chat_requests[0]["messages"][0]["content"]
 
 
+def test_remember_that_refers_back_to_earlier_messages(client):
+    llm = FakeLLM()
+    first = chat(client, llm, "I have two cats, Miso and Tofu")
+    chat(client, llm, "Please remember that", conversation_id=first[0]["conversation_id"])
+    asked = llm.extract_requests[-1]
+    assert "Earlier in this chat:" in asked["messages"][1]["content"]
+    assert "Miso and Tofu" in asked["messages"][1]["content"]
+    assert asked["reasoning_effort"] == "none"  # no minutes of thinking for a background job
+    # Amy is told memory exists, so it doesn't claim it can't remember.
+    assert "You have long-term memory" in llm.chat_requests[-1]["messages"][0]["content"]
+
+
+def test_a_failed_memory_update_is_shown(client):
+    class Rambler(FakeLLM):
+        def __call__(self, request):
+            body = json.loads(request.content)
+            if not body.get("stream"):
+                return httpx.Response(200, json={"choices": [{"message": {"content": "Hmm."}}]})
+            return super().__call__(request)
+
+    events = chat(client, Rambler(), "I live in Redmond")
+    note = next(e for e in events if e["type"] == "memory")
+    assert note["action"] == "failed"
+
+
+def test_background_replies_fall_back_without_the_reasoning_option():
+    from app.providers.base import Provider
+
+    bodies = []
+
+    def server(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "reasoning_effort" in body:
+            return httpx.Response(400, json={"error": "unknown field"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(server)) as c:
+            return await Provider("p", "http://x/v1").quick_reply(c, {"model": "m", "messages": []})
+
+    assert asyncio.run(go()) == "ok"
+    assert len(bodies) == 2 and "reasoning_effort" not in bodies[1]
+
+
 def test_updates_removes_and_filters_secrets(client):
     db = client.app.state.db
     old = db.add_memory("Lives in Seattle", "personal")

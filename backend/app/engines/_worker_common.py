@@ -80,6 +80,16 @@ def download(spec: dict, dest: Path) -> None:
             allow_patterns=spec.get("allow_patterns"),
             local_dir=dest,
         )
+    elif spec["type"] == "hub":
+        # Into the shared Hugging Face cache (HF_HUB_CACHE), for libraries that load by name.
+        os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(
+            repo_id=spec["repo"],
+            revision=spec.get("revision"),
+            allow_patterns=spec.get("allow_patterns"),
+        )
     elif spec["type"] == "urls":
         for name, url in spec["files"].items():
             target = dest / name

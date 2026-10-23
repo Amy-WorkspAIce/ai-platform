@@ -9,6 +9,7 @@ PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
 DATA="${AMY_DATA_DIR:-/data}"
 PORT="${AMY_PORT:-8484}"
+HTTPS_PORT="${AMY_HTTPS_PORT:-8443}"
 
 mkdir -p "$DATA"
 
@@ -58,9 +59,22 @@ if [ "${AMY_BUNDLED_SEARXNG:-false}" = "true" ] && [ -x /opt/searxng/bin/granian
   searxng_loop=$!
 fi
 
-echo "[amy] starting AI Platform on :$PORT"
-run_as python -m uvicorn app.main:create_app --factory --host 0.0.0.0 --port "$PORT" \
-  --proxy-headers --forwarded-allow-ips="*" &
+# HTTPS (browsers allow the microphone only on secure pages): a self-signed certificate made
+# once, unless you've put your own cert.pem and key.pem in $DATA/secrets/tls. AMY_HTTPS_PORT=0
+# turns it off.
+export AMY_TLS_DIR="$DATA/secrets/tls"
+if [ "$HTTPS_PORT" != "0" ] && [ ! -s "$AMY_TLS_DIR/cert.pem" ] && command -v openssl >/dev/null; then
+  mkdir -p "$AMY_TLS_DIR"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=Amy AI Platform" \
+    -addext "subjectAltName=DNS:localhost,DNS:$(hostname),IP:127.0.0.1" \
+    -keyout "$AMY_TLS_DIR/key.pem" -out "$AMY_TLS_DIR/cert.pem" >/dev/null 2>&1 \
+    && chmod 600 "$AMY_TLS_DIR/key.pem" \
+    && echo "[amy] made a self-signed HTTPS certificate in $AMY_TLS_DIR"
+  if [ "$(id -u)" = "0" ]; then chown -R "$PUID:$PGID" "$DATA/secrets"; fi
+fi
+
+echo "[amy] starting AI Platform on :$PORT (HTTPS :$HTTPS_PORT)"
+AMY_PORT="$PORT" AMY_HTTPS_PORT="$HTTPS_PORT" run_as python -m app.serve &
 pids+=($!)
 
 stop_all() {

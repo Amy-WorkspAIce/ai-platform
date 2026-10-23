@@ -21,6 +21,7 @@
     }
   ],
   "port": 8484,
+  "https_port": 8443,
   "health": "/health",
   "data": "/data",
   "settings": [

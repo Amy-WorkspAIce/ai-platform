@@ -46,7 +46,7 @@ RUN pip install --no-cache-dir /app/backend
 COPY --from=frontend /src/dist /app/static
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-EXPOSE 8484
+EXPOSE 8484 8443
 LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/Amy-WorkspAIce/brand/main/logos/amy-workspaice-app-icon-512.png" net.unraid.docker.webui="http://[IP]:[PORT:8484]/"
 VOLUME /data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
@@ -92,7 +92,7 @@ RUN pip install --no-cache-dir /app/backend
 COPY --from=frontend /src/dist /app/static
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-EXPOSE 8484
+EXPOSE 8484 8443
 LABEL net.unraid.docker.icon="https://raw.githubusercontent.com/Amy-WorkspAIce/brand/main/logos/amy-workspaice-app-icon-512.png" net.unraid.docker.webui="http://[IP]:[PORT:8484]/"
 VOLUME /data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \

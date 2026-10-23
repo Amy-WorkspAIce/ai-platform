@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 INCLUDE_ALL_BELOW = 40  # with this few facts, recall them all
 RECALL_LIMIT = 12
+EARLIER_TURNS = 6  # the user's earlier messages in the chat shown to extraction
 CATEGORIES = ("personal", "preferences", "work", "projects", "people", "setup", "goals", "general")
 
 # Never remember these, even if mentioned.
@@ -38,12 +39,16 @@ conversations can be more helpful. Review the latest exchange and decide what to
 
 Remember: stable facts about the user: who they are, where they live (city and region \
 only, e.g. "Lives in Redmond, WA", even when it comes up during a one-off task like a weather \
-lookup), preferences (style, tools, formats, units), their work and projects, people they \
-mention, their hardware/software setup, goals, and explicit requests to remember something.
+lookup), preferences (style, tools, formats, units), their work and projects, people and pets \
+they mention, their hardware/software setup, goals, and explicit requests to remember something.
 Do NOT remember: one-off tasks or questions, things only true right now, facts about the \
 world (not the user), what the assistant said, or anything sensitive (passwords, keys, \
 tokens, account or card numbers, street addresses, health or financial details) unless the \
 user explicitly asks you to remember it.
+Facts come only from what the USER said. Never record the assistant's claims or abilities \
+(e.g. "has no persistent memory") as facts about the user. When the user asks you to remember \
+something said earlier, take the facts from their earlier messages. A question about code, \
+an error or a task says nothing about the user by itself: return empty lists for it.
 
 Write each fact as one short, self-contained statement about the user, e.g. "Prefers concise \
 answers", "Runs an Unraid server with an RTX 2080 Ti", "Has a daughter named Maya".
@@ -225,12 +230,16 @@ async def extract(
     user_message: str,
     assistant_reply: str,
     conversation_id: str,
+    earlier: list[str] | None = None,
 ) -> list[dict]:
     """Update memory from one exchange. Returns changes: [{"action", "text"}]."""
     db = app.state.db
     known = await recall(app, user_message, limit=30)
     known_text = "\n".join(f"{f['id']}: {f['text']}" for f in known) or "(none yet)"
     exchange = f"User: {user_message[:4000]}\n\nAssistant: {assistant_reply[:2000]}"
+    if earlier:
+        before = "\n\n".join(f"User: {m[:1500]}" for m in earlier)
+        exchange = f"Earlier in this chat:\n{before}\n\nLatest exchange:\n{exchange}"
     payload = {
         "model": model,
         "messages": [
@@ -247,17 +256,15 @@ async def extract(
         "response_format": {"type": "json_object"},
     }
     try:
-        resp = await app.state.http.post(
-            provider.url("chat/completions"), json=payload, headers=provider.headers(), timeout=120
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"].get("content") or ""
+        content = await provider.quick_reply(app.state.http, payload)
     except (httpx.HTTPError, ValueError, KeyError, IndexError) as exc:
-        log.info("Memory extraction skipped: %s", exc)
-        return []
+        reason = str(exc) or type(exc).__name__
+        log.warning("Memory update failed with %s: %s", model, reason)
+        return [{"action": "failed", "text": f"{model} couldn't do it ({reason})"}]
     data = _json_object(content)
     if not data:
-        return []
+        log.warning("Memory update: %s didn't reply with JSON: %.300s", model, content)
+        return [{"action": "failed", "text": f"{model} didn't give a usable answer"}]
 
     known_ids = {f["id"]: f for f in known}
     changes: list[dict] = []

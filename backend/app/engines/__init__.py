@@ -18,13 +18,16 @@ process that loads it differs. Runtimes are installed the first time a model nee
 """
 
 import asyncio
+import collections
 import contextlib
+import io
 import json
 import logging
 import os
 import shutil
 import socket
 import sys
+import tarfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,7 +54,16 @@ class EngineSpec:
     # The packages pin their own torch version: install everything in one go, with the
     # CUDA (or CPU) wheel index as an extra source so the pinned torch matches this machine.
     torch_pinned: bool = False
+    # A Python version the packages need, when it isn't the container's: uv downloads it once
+    # (to engines/pythons) and makes the venv with it.
+    python: str | None = None
+    # Source folders copied over the installed package, for libraries whose pip package
+    # leaves subpackages out: ("owner/repo@ref", "package_dir").
+    overlays: tuple[tuple[str, str], ...] = ()
 
+
+# Kept free after an install, for logs, the database and temporary files.
+SPACE_MARGIN_GB = 5
 
 ENGINES: dict[str, EngineSpec] = {
     "image": EngineSpec(
@@ -97,7 +109,7 @@ ENGINES: dict[str, EngineSpec] = {
 OLD_TORCHAUDIO = ("torch<2.9", "torchaudio<2.9")
 
 
-def _speech_runtime(id: str, name: str, *packages: str) -> EngineSpec:
+def _speech_runtime(id: str, name: str, *packages: str, **options) -> EngineSpec:
     """A text-to-speech runtime: one library in its own venv, served by speech_worker.py."""
     return EngineSpec(
         id=id,
@@ -107,15 +119,33 @@ def _speech_runtime(id: str, name: str, *packages: str) -> EngineSpec:
         needs_torch=True,
         # These libraries pin torch (and transformers) versions of their own.
         torch_pinned=True,
+        **options,
     )
+
+
+def _github(repo: str, commit: str, package: str, extra: str = "") -> str:
+    """A pip requirement for a library installed from a tested GitHub commit."""
+    return f"{package}{extra} @ https://github.com/{repo}/archive/{commit}.zip"
+
+
+MELO = ("myshell-ai/MeloTTS", "209145371cff8fc3bd60d7be902ea69cbdb7965a")
+ZONOS = ("Zyphra/Zonos", "bc40d98e1e1ab54fc65c483be127a90e3c7c0645")
+INDEXTTS = ("index-tts/index-tts", "d9e41aac89fd00b3d71497fddb287b7f24613712")
+VIBEVOICE = ("microsoft/VibeVoice", "16fb2cb1217c9934a886e1948ffb06120caa2df5")
 
 
 # Runtimes for speech models whose libraries need their own environment (see the module
 # docstring). Chosen per model from its Hugging Face library (app.catalog.speech).
 ENGINES.update(
     {
+        # 4.52+ for Sesame CSM.
         "tts-transformers": _speech_runtime(
-            "tts-transformers", "Transformers", "torch", "transformers>=4.51"
+            "tts-transformers",
+            "Transformers",
+            "torch",
+            "transformers>=4.57",
+            "accelerate",
+            version=2,
         ),
         # Its watermarker (perth) imports pkg_resources, which setuptools 81 removed.
         "tts-chatterbox": _speech_runtime(
@@ -127,6 +157,50 @@ ENGINES.update(
         "tts-qwen": _speech_runtime("tts-qwen", "Qwen3-TTS", "qwen-tts"),
         "tts-omnivoice": _speech_runtime("tts-omnivoice", "OmniVoice", "omnivoice"),
         "tts-voxcpm": _speech_runtime("tts-voxcpm", "VoxCPM", "voxcpm", *OLD_TORCHAUDIO),
+        "tts-supertonic": _speech_runtime("tts-supertonic", "Supertonic", "supertonic>=1.3"),
+        "tts-kitten": _speech_runtime("tts-kitten", "KittenTTS", "kittenml>=0.9", "torch"),
+        "tts-kyutai": _speech_runtime("tts-kyutai", "Kyutai TTS", "moshi>=0.2.13"),
+        "tts-pocket": _speech_runtime("tts-pocket", "Pocket TTS", "pocket-tts>=4"),
+        "tts-parler": _speech_runtime("tts-parler", "Parler-TTS", "parler-tts"),
+        # Its pinned dependencies (fugashi 1.3) have no Python 3.12 wheels. It wants the
+        # 500 MB UniDic dictionary; the worker points it at unidic-lite instead.
+        "tts-melo": _speech_runtime(
+            "tts-melo",
+            "MeloTTS",
+            _github(*MELO, "melotts"),
+            "unidic-lite",
+            "setuptools<81",
+            python="3.11",
+        ),
+        "tts-sopro": _speech_runtime("tts-sopro", "Sopro", "sopro>=2"),
+        "tts-soprano": _speech_runtime("tts-soprano", "Soprano", "soprano-tts"),
+        # Its pip package leaves out subpackages, so the source folder is copied over it.
+        # espeakng-loader bundles the espeak-ng library its phonemizer needs.
+        "tts-zonos": _speech_runtime(
+            "tts-zonos",
+            "Zonos",
+            _github(*ZONOS, "zonos"),
+            "espeakng-loader",
+            overlays=((f"{ZONOS[0]}@{ZONOS[1]}", "zonos"),),
+        ),
+        # neucodec's torchtune needs a torchao that matches torch 2.8.
+        "tts-neutts": _speech_runtime(
+            "tts-neutts",
+            "NeuTTS",
+            "neutts",
+            *OLD_TORCHAUDIO,
+            "torchao==0.13.*",
+            "espeakng-loader",
+        ),
+        "tts-outetts": _speech_runtime("tts-outetts", "OuteTTS", "outetts", *OLD_TORCHAUDIO),
+        "tts-indextts": _speech_runtime(
+            "tts-indextts", "IndexTTS", _github(*INDEXTTS, "indextts"), python="3.11"
+        ),
+        "tts-vibevoice": _speech_runtime(
+            "tts-vibevoice", "VibeVoice", _github(*VIBEVOICE, "vibevoice", "[streamingtts]")
+        ),
+        # onnxruntime 1.24 refuses its models' external weight files.
+        "tts-vieneu": _speech_runtime("tts-vieneu", "VieNeu-TTS", "vieneu", "onnxruntime<1.24"),
     }
 )
 
@@ -165,6 +239,8 @@ class EngineManager:
         self.workers: dict[str, Worker] = {}
         self._start_locks: dict[str, asyncio.Lock] = {}
         self._reaper: asyncio.Task | None = None
+        # Runtimes with an install under way, so deleting a model never removes one mid-install.
+        self._installing: collections.Counter[str] = collections.Counter()
 
     # ---- paths & state ----
 
@@ -180,6 +256,12 @@ class EngineManager:
         """The engine whose worker runs this model (itself, unless it names a runtime)."""
         rt = ((variant or {}).get("engine_config") or {}).get("runtime")
         return rt if rt in ENGINES else engine
+
+    @property
+    def hub_cache(self) -> Path:
+        """A Hugging Face cache shared by the workers, for helper models that libraries load by
+        repo name (a vocoder, a text encoder): filled at install, read offline."""
+        return self.models_root / "hub"
 
     def model_dir(self, engine: str, tag: str) -> Path:
         return self.models_root / engine / tag
@@ -248,10 +330,28 @@ class EngineManager:
         self, engine: str, variant: dict, state: PullState, hf_token: str | None = None
     ) -> None:
         runtime = self.runtime(engine, variant)
-        if not self.engine_installed(runtime):
-            await self._install_engine(ENGINES[runtime], state)
-        await self._download_model(engine, variant, state, hf_token)
+        self.check_space(runtime, variant)
+        self._installing[runtime] += 1
+        try:
+            if not self.engine_installed(runtime):
+                await self._install_engine(ENGINES[runtime], state)
+            await self._download_model(engine, variant, state, hf_token)
+        finally:
+            self._installing[runtime] -= 1
         state.status = "success"
+
+    def check_space(self, runtime: str, variant: dict) -> None:
+        """Refuse an install that would fill the disk: a full disk breaks far more than Amy."""
+        need = float(variant.get("size_gb") or 1) + SPACE_MARGIN_GB
+        if not self.engine_installed(runtime):
+            need += (8 if self.gpu else 3) if ENGINES[runtime].needs_torch else 1
+        self.models_root.mkdir(parents=True, exist_ok=True)
+        free = shutil.disk_usage(self.models_root).free / 1e9
+        if free < need:
+            raise EngineError(
+                f"Not enough disk space: this needs about {need:.0f} GB and {free:.0f} GB is free."
+                " Delete models you don't use, or give Amy's data folder more room."
+            )
 
     def _installed_info(self, engine: str) -> dict:
         try:
@@ -270,7 +370,23 @@ class EngineManager:
             if self.venv(spec.id).exists():
                 shutil.rmtree(self.venv(spec.id))
             base.mkdir(parents=True, exist_ok=True)
-            await self._run(state, [sys.executable, "-m", "venv", str(self.venv(spec.id))])
+            if spec.python:
+                await self._run(
+                    state,
+                    [
+                        sys.executable,
+                        "-m",
+                        "uv",
+                        "venv",
+                        "--seed",
+                        "--python",
+                        spec.python,
+                        str(self.venv(spec.id)),
+                    ],
+                    env=dict(os.environ, UV_PYTHON_INSTALL_DIR=str(self.root / "pythons")),
+                )
+            else:
+                await self._run(state, [sys.executable, "-m", "venv", str(self.venv(spec.id))])
         pip = [
             str(self.python(spec.id)),
             "-m",
@@ -286,11 +402,34 @@ class EngineManager:
         packages = list(spec.packages) + (list(spec.gpu_packages) if self.gpu else [])
         extra = ["--extra-index-url", index] if spec.torch_pinned else []
         await self._run(state, [*pip, *packages, *extra], spec.name)
+        for source, package in spec.overlays:
+            await self._overlay(spec, source, package)
         self._marker(spec.id).write_text(json.dumps({"version": spec.version, "gpu": self.gpu}))
 
-    async def _run(self, state: PullState, cmd: list[str], label: str | None = None) -> None:
+    def site_packages(self, engine: str) -> Path:
+        found = sorted(self.venv(engine).glob("lib/python*/site-packages"))
+        return found[0] if found else self.venv(engine) / "Lib" / "site-packages"
+
+    async def _overlay(self, spec: EngineSpec, source: str, package: str) -> None:
+        """Copy ``package`` from a GitHub source archive over the installed one."""
+        repo, _, ref = source.partition("@")
+        url = f"https://codeload.github.com/{repo}/tar.gz/{ref or 'HEAD'}"
+        async with httpx.AsyncClient(follow_redirects=True, timeout=120) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+        await asyncio.to_thread(
+            extract_package, resp.content, package, self.site_packages(spec.id) / package
+        )
+
+    async def _run(
+        self,
+        state: PullState,
+        cmd: list[str],
+        label: str | None = None,
+        env: dict[str, str] | None = None,
+    ) -> None:
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env
         )
         tail: list[str] = []
         assert proc.stdout is not None
@@ -314,7 +453,7 @@ class EngineManager:
         partial.parent.mkdir(parents=True, exist_ok=True)
         state.status = "Downloading model"
         state.total = int((variant.get("size_gb") or 1) * 1e9)
-        env = dict(os.environ, HF_HUB_DISABLE_TELEMETRY="1")
+        env = dict(os.environ, HF_HUB_DISABLE_TELEMETRY="1", HF_HUB_CACHE=str(self.hub_cache))
         if hf_token:
             env["HF_TOKEN"] = hf_token
         runtime = self.runtime(engine, variant)
@@ -358,18 +497,30 @@ class EngineManager:
         state.completed = state.total
 
     async def delete_model(self, engine: str, tag: str) -> None:
+        runtime = self.runtime(engine, self.installed_variant(engine, tag))
         await self.stop_worker(engine)
-        await self.stop_worker(self.runtime(engine, self.installed_variant(engine, tag)))
+        await self.stop_worker(runtime)
         for d in (self.model_dir(engine, tag), self.model_dir(engine, tag + ".partial")):
             if d.exists():
                 await asyncio.to_thread(shutil.rmtree, d)
+        # A runtime is a private Python with PyTorch (gigabytes), so it goes with its last model.
+        if runtime != engine and not self._installing[runtime] and not self.runtime_in_use(runtime):
+            await asyncio.to_thread(shutil.rmtree, self.root / runtime, ignore_errors=True)
+
+    def runtime_in_use(self, runtime: str) -> bool:
+        return any(self.runtime(e, v) == runtime for e, _, v in self.installed_models())
 
     # ---- workers ----
 
     def _env(self, engine: str) -> dict[str, str]:
         # Note: don't set PYTORCH_CUDA_ALLOC_CONF=expandable_segments here; it isn't supported
         # by the WSL GPU driver and crashed Docker Desktop's VM in testing.
-        env = dict(os.environ, HF_HUB_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1")
+        env = dict(
+            os.environ,
+            HF_HUB_OFFLINE="1",
+            HF_HUB_DISABLE_TELEMETRY="1",
+            HF_HUB_CACHE=str(self.hub_cache),
+        )
         # pip-installed NVIDIA libraries (cuBLAS, cuDNN) aren't on the loader path by default.
         libs = sorted(
             str(p) for p in self.venv(engine).glob("lib/python*/site-packages/nvidia/*/lib")
@@ -471,6 +622,22 @@ class EngineManager:
                 if w.busy == 0 and now - w.last_used > self.idle_seconds:
                     log.info("Stopping idle %s", ENGINES[engine].name)
                     await self.stop_worker(engine)
+
+
+def extract_package(archive: bytes, package: str, dest: Path) -> None:
+    """Replace ``dest`` with the ``<top>/<package>/`` folder of a GitHub .tar.gz archive."""
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
+        members = []
+        for m in tar.getmembers():
+            parts = Path(m.name).parts
+            if len(parts) > 2 and parts[1] == package and (m.isfile() or m.isdir()):
+                m.name = str(Path(*parts[2:]))
+                members.append(m)
+        if not members:
+            raise EngineError(f"{package}/ isn't in the source archive")
+        if dest.exists():
+            shutil.rmtree(dest)
+        tar.extractall(dest, members=members, filter="data")
 
 
 def dir_size(path: Path) -> int:

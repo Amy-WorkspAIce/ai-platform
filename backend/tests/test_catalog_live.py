@@ -331,3 +331,42 @@ def test_env_token_is_read_only(tmp_path):
     with TestClient(create_app(settings)) as c:
         assert c.get("/api/settings", headers=AUTH).json()["huggingface"]["source"] == "env"
         assert c.delete("/api/settings/huggingface", headers=AUTH).status_code == 409
+
+
+def test_whisper_sizes_come_from_the_name():
+    from app.catalog.live import whisper_size_gb
+
+    assert whisper_size_gb("Systran/faster-whisper-large-v3") == 3.1
+    assert whisper_size_gb("rhasspy/faster-whisper-small-int8") == 0.24
+    assert whisper_size_gb("deepdml/faster-whisper-large-v3-turbo-ct2") == 1.62
+    assert whisper_size_gb("Systran/faster-distil-whisper-medium.en") == 0.79
+    assert whisper_size_gb("Sunbird/faster-whisper-51-african-languages") is None
+
+
+def test_sizes_the_listing_lacks_are_added_up_from_the_files(tmp_path):
+    import asyncio
+
+    import httpx
+
+    from app.catalog.live import LiveCatalog
+
+    def hf(request):
+        if request.url.path == "/api/models":
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": "Sunbird/faster-whisper-51-african-languages", "tags": ["ctranslate2"]}
+                ],
+            )
+        siblings = [
+            {"rfilename": "model.bin", "size": 3_087_000_000},
+            {"rfilename": "README.md", "size": 5000},
+        ]
+        return httpx.Response(200, json={"siblings": siblings})
+
+    async def go():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(hf)) as c:
+            return await LiveCatalog(tmp_path, c).hf_families("transcription")
+
+    variant = asyncio.run(go())[0]["variants"][0]
+    assert variant["size_gb"] == 3.09 and variant["vram_gb"] == 4.6

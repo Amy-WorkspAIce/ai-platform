@@ -12,12 +12,13 @@ type Props = {
   onChanged: () => void;
   onDeleted: (id: string) => void;
   onError: (e: unknown) => void;
+  onOpenRules: (folderId: string) => void;
 };
 
 const DRAG_TYPE = "application/x-amy-chat";
 
 /** Sidebar chat history: collapsible folders (drag chats in and out) plus unfiled chats. */
-export function ChatList({ api, conversations, folders, activeId, onOpen, onNewChat, onChanged, onDeleted, onError }: Props) {
+export function ChatList({ api, conversations, folders, activeId, onOpen, onNewChat, onChanged, onDeleted, onError, onOpenRules }: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
 
@@ -155,6 +156,9 @@ export function ChatList({ api, conversations, folders, activeId, onOpen, onNewC
               <span className="history-actions">
                 <button aria-label="New chat in folder" title="New chat in this folder" onClick={() => onNewChat(f.id)}>
                   +
+                </button>
+                <button aria-label="Folder rules" title="Rules for this folder" onClick={() => onOpenRules(f.id)}>
+                  <Icon name="rules" size={14} />
                 </button>
                 <button aria-label="Rename folder" title="Rename" onClick={() => void renameFolder(f)}>
                   <Icon name="edit" size={14} />

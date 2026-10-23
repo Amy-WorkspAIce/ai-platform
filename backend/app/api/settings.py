@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app import __version__
+from app import __version__, routing
 from app.delegation import CAPABILITIES, installed_for
 from app.security import require_api_key
 from app.tools.web import provider_chain
@@ -47,13 +47,13 @@ async def get_settings(request: Request) -> dict:
         "search": {"providers": provider_chain(s), "bundled_searxng": s.bundled_searxng},
         "web_access": store(request).web_access,
         "voice": store(request).voice,
-        "models": model_choices(request),
+        "models": await model_choices(request),
     }
 
 
-def model_choices(request: Request) -> dict:
+async def model_choices(request: Request) -> dict:
     defaults = store(request).model_defaults()
-    out = {}
+    out = await routing.choices(request.app)
     for cap in CAPABILITIES:
         installed = installed_for(request.app, cap)
         out[cap] = {
@@ -66,14 +66,16 @@ def model_choices(request: Request) -> dict:
 
 @router.put("/models")
 async def set_model_default(request: Request, body: ModelDefaultBody) -> dict:
-    if body.capability not in CAPABILITIES:
+    if body.capability in routing.PURPOSES:
+        available = {m["id"] for m in await routing.chat_models(request.app)}
+    elif body.capability in CAPABILITIES:
+        available = {m["id"] for m in installed_for(request.app, body.capability)}
+    else:
         raise HTTPException(400, f"Unknown capability '{body.capability}'")
-    if body.model and body.model not in {
-        m["id"] for m in installed_for(request.app, body.capability)
-    }:
+    if body.model and body.model not in available:
         raise HTTPException(400, f"'{body.model}' isn't an installed {body.capability} model")
     store(request).set_model_default(body.capability, body.model)
-    return model_choices(request)
+    return await model_choices(request)
 
 
 @router.put("/web")

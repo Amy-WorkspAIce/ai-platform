@@ -35,6 +35,7 @@ UA = "Mozilla/5.0 (compatible; AmyAI/1.0; +https://github.com/Amy-WorkspAIce)"
 
 LIBRARY_TTL = 24 * 3600
 HF_TTL = 6 * 3600
+MAX_SIZE_LOOKUPS = 25  # per listing: models whose size has to be looked up file by file
 
 # Pipelines whose weights are bfloat16-native; others are fine in float16.
 BF16_PIPELINES = re.compile(
@@ -278,6 +279,42 @@ def _half_precision_gb(model: dict) -> float | None:
     return round(total * 2 / 1e9, 2) if total else None
 
 
+# Whisper comes in a few fixed sizes (millions of parameters). Faster-Whisper (CTranslate2)
+# repos ship model.bin, not safetensors, so the listing has no parameter count to go on.
+WHISPER_PARAMS = (
+    ("turbo", 809),
+    ("kotoba", 756),  # kotoba-whisper is distilled from large-v3
+    ("breeze-asr", 1550),  # fine-tuned large-v2
+    ("large", 1550),
+    ("medium", 769),
+    ("small", 244),
+    ("base", 74),
+    ("tiny", 39),
+)
+DISTIL_PARAMS = {"large": 756, "medium": 394, "small": 166}
+
+
+def whisper_size_gb(repo: str) -> float | None:
+    name = repo.lower().split("/", 1)[-1]
+    key, params = next(((k, m) for k, m in WHISPER_PARAMS if k in name), (None, None))
+    if params is None:
+        return None
+    if "distil" in name:
+        params = DISTIL_PARAMS.get(key, params)
+    per_param = 1 if "int8" in name else 4 if ("float32" in name or "fp32" in name) else 2
+    return round(params * per_param / 1000, 2)
+
+
+def _sized(variant: dict, size: float, engine: str) -> None:
+    """Fill in the memory estimates from a model's size."""
+    # Rough until installed: components load one at a time, and the largest is usually
+    # well over half of the total. Exact per-component sizes are computed at install.
+    largest = size * (0.7 if engine == "image" else 1.0)
+    variant.update(
+        size_gb=size, vram_gb=round(largest + 1.5, 1), ram_gb=round(size + 2, 1), min_vram_gb=4
+    )
+
+
 def describe_hf(kind: str | None, likes: int, extra: str | None = None) -> str:
     parts = [kind] if kind else []
     if extra:
@@ -295,6 +332,8 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
     size = half = _half_precision_gb(model)
     if category == "speech" and not size:
         size = speech.KNOWN_GB.get(repo.lower())
+    if category == "transcription" and not size:
+        size = whisper_size_gb(repo)
     unsupported = None
     engine = "image"
     task = category
@@ -321,10 +360,7 @@ def hf_family(model: dict, category: str, hf_token_set: bool) -> dict | None:
         "updated": iso_to_epoch(model.get("lastModified")),
     }
     if size:
-        # Rough until installed: components load one at a time, and the largest is usually
-        # well over half of the total. Exact per-component sizes are computed at install.
-        largest = size * (0.7 if engine == "image" else 1.0)
-        variant.update(vram_gb=round(largest + 1.5, 1), ram_gb=round(size + 2, 1), min_vram_gb=4)
+        _sized(variant, size, engine)
     return {
         "id": f"hf:{repo}",
         "name": repo.split("/", 1)[1],
@@ -371,6 +407,7 @@ class LiveCatalog:
         self._sizes_file = cache_dir / "ollama-sizes.json"
         self._library_file = cache_dir / "ollama-library.json"
         self._sizes: dict[str, float] = self._load(self._sizes_file, {})
+        self._repo_sizes: dict[str, float | None] = {}  # Hugging Face repos, added-up files
         self._size_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
@@ -498,8 +535,46 @@ class LiveCatalog:
                 if fam and fam["id"] not in out:
                     out[fam["id"]] = fam
         result = list(out.values())
+        await self._fill_missing_sizes(result)
         self._mem.put(key, result)
         return result
+
+    async def _fill_missing_sizes(self, families: list[dict]) -> None:
+        """Models whose size the listing doesn't reveal: add up their files instead (cached), so
+        the catalog can say whether they fit."""
+        missing = [(f, v) for f in families for v in f["variants"] if not v.get("size_gb")][
+            :MAX_SIZE_LOOKUPS
+        ]
+        if not missing:
+            return
+        sem = asyncio.Semaphore(6)
+
+        async def one(fam: dict, variant: dict) -> None:
+            repo = variant["tag"]
+            if repo not in self._repo_sizes:
+                async with sem:
+                    self._repo_sizes[repo] = await self._repo_size(repo)
+            if self._repo_sizes[repo]:
+                _sized(variant, self._repo_sizes[repo], fam["engine"])
+
+        await asyncio.gather(*(one(f, v) for f, v in missing))
+
+    async def _repo_size(self, repo: str) -> float | None:
+        try:
+            resp = await self.client.get(
+                f"{HF_API}/models/{repo}",
+                params={"blobs": "true"},
+                headers=hf_headers(self.hf_token()),
+                timeout=20,
+            )
+            resp.raise_for_status()
+            files = resp.json().get("siblings") or []
+        except (httpx.HTTPError, ValueError) as exc:
+            log.info("No size for %s: %s", repo, exc)
+            return None
+        weights = (".bin", ".safetensors", ".pt", ".pth", ".onnx", ".ckpt")
+        total = sum(f.get("size") or 0 for f in files if f["rfilename"].endswith(weights))
+        return round(total / 1e9, 2) or None
 
     async def gguf_search(self, query: str, limit: int = 10) -> list[dict]:
         """Language models in GGUF format, installable through Ollama as hf.co/<repo>:<quant>."""
@@ -757,6 +832,7 @@ async def audio_spec(repo: str, client: httpx.AsyncClient, token: str | None) ->
             "backend": runtime.removeprefix("tts-"),
             "source": source,
             "extras": speech.extras(runtime),
+            **speech.options(runtime, repo),
         },
     }
 

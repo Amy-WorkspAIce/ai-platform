@@ -61,13 +61,16 @@ backend/            Python 3.11+ / FastAPI
   app/user_settings.py  Settings-page values (Hugging Face token in /data/secrets)
   app/agent.py      tool-calling loop, approvals, streaming events
   app/memory.py     long-term memory: fact extraction, embeddings, recall
+  app/routing.py    Auto: which chat model answers (chat or coding default, else best installed)
+  app/rules.py      rules (everywhere / folder / workspace), workspace rule files, ask_models
   app/context.py    context window budgeting: trim tool output, summarize old messages
   app/tools/        web (search providers, page fetch with LAN blocking), workspace
                     (confined file tools, shell commands with scrubbed env)
   app/api/          routers: system, models, conversations, agent, media, openai (/v1)
   tests/
 frontend/           TypeScript / React / Vite (built into backend's static dir)
-  src/views/        ChatView, LibraryView, MemoryView, ModelsView, SettingsView
+  src/views/        ChatView, LibraryView, MemoryView, ModelsView, RulesView, SettingsView,
+                    VoicesView
                     (media.tsx: inline media, ChatList.tsx: sidebar folders)
 scripts/            maintenance (refresh_catalog_sizes.py)
 docker/             entrypoint
@@ -85,12 +88,37 @@ operations shared with the `/v1` API. Results come back as attachments shown inl
 to the Library. GPU sharing: media jobs unload Ollama models first; afterwards a fully-on-GPU
 pipeline is "parked" in RAM so the chat model can reload.
 
+**Auto** (`app/routing.py`): the chat box's default model is `auto`. Agent-mode tasks, and chat
+messages with code (fences, stack traces, or programming vocabulary), go to the **coding**
+model; everything else to the **chat** model. Each is the Settings pin, else the best installed
+chat model: runs well on this hardware first, then tool support (from Ollama's `/api/tags`
+capabilities, else the catalog), then the right kind (coder or general, by name), then the
+biggest. A chat that turns to code stays with the coding model for its follow-ups (the purpose
+is saved on the conversation), and each message records the model that answered.
+
+**Rules** (`app/rules.py`, `rules` and `rule_exclusions` tables): standing instructions with a
+scope (`global`, `folder:<id>`, `workspace:<name>`) and a target (`always`, `chat`, `agent`).
+A chat gets the global rules plus its folder's and workspace's, minus global rules that folder
+or workspace switched off; they go into the system prompt widest first, and the more specific
+one wins a conflict. In agent mode, rule files already in the workspace (`AGENTS.md`,
+`CLAUDE.md`, `.cursorrules`, `.cursor/rules/`, `.amy/rules/`) are added too. When a rule asks
+for other models' views, the `ask_models` tool is offered: one question to up to five installed
+models at once, answers returned side by side. It isn't offered otherwise, because small models
+reach for it on every message. Deleting a folder or workspace deletes its rules.
+
 ## Memory
 
 Facts about the user live in the `memories` table in the same SQLite database (one short
 sentence each, with a category and the chat it came from). After each reply, once the answer
 has been streamed (`answer_done`), the chat model is asked for JSON `{add, update, remove}`
 against the facts it already knows; results stream as `memory` events and appear in chat.
+The request sees the user's last few messages too, so "remember that" works on details given
+earlier, and it runs as its own task, so leaving the chat page doesn't cancel it. Background
+requests (memory, summaries) send `reasoning_effort: "none"`, retried without it if the
+server refuses: reasoning models otherwise think for minutes, or spend the whole token budget
+thinking. When a coding model answered, a general model does the extraction (coders tend to
+"remember" facts about the code). Amy's system prompt says memory exists, so it doesn't deny
+it, and a failed update shows as a `memory` event with `action: "failed"`.
 Anything that looks like a secret (keys, passwords, tokens, card numbers) is dropped.
 
 Recall: with 40 facts or fewer, all of them go into the system prompt. Beyond that, the most
@@ -135,13 +163,43 @@ Hugging Face `library_name` and tags, and the files to download.
 
 | Runtime | Packages | Models |
 |---|---|---|
-| `tts-transformers` | torch, transformers | MMS-TTS / VITS (1,100+ languages), Bark |
+| `tts-transformers` | torch, transformers | MMS-TTS / VITS (1,100+ languages), Bark, Sesame CSM |
 | `tts-chatterbox` | chatterbox-tts | Resemble AI Chatterbox |
-| `tts-f5` | f5-tts, torch/torchaudio < 2.9 | F5-TTS (plus the Vocos vocoder) |
+| `tts-f5` | f5-tts, torch/torchaudio < 2.9 | F5-TTS, E2-TTS and listed fine-tunes (plus the Vocos vocoder) |
 | `tts-xtts` | coqui-tts, torch/torchaudio < 2.9 | Coqui XTTS v2 (58 built-in speakers) |
 | `tts-qwen` | qwen-tts | Qwen3-TTS CustomVoice (9 speakers), VoiceDesign (described voices), Base (copies a sample) |
 | `tts-omnivoice` | omnivoice | k2-fsa OmniVoice (600+ languages; described or copied voices) |
 | `tts-voxcpm` | voxcpm, torch/torchaudio < 2.9 | OpenBMB VoxCPM2 (30 languages, 48 kHz; described or copied voices) |
+| `tts-supertonic` | supertonic (ONNX) | Supertone Supertonic 2 and 3 (tiny, fast on CPU) |
+| `tts-kitten` | kittenml | KittenTTS (ONNX) and KittenTTS 2 (47 voices; copies voices) |
+| `tts-kyutai` | moshi | Kyutai TTS 1.6B (Kyutai's voice library) and 0.75B (copies voices) |
+| `tts-pocket` | pocket-tts | Kyutai Pocket TTS (CPU; the gated weights also copy voices) |
+| `tts-parler` | parler-tts | Parler-TTS and Indic Parler-TTS (described voices) |
+| `tts-melo` | MeloTTS (GitHub), unidic-lite; Python 3.11 | MeloTTS (English accents, Chinese, Japanese, Spanish, French, Korean) |
+| `tts-sopro` | sopro | Sopro (copies voices) |
+| `tts-soprano` | soprano-tts | Soprano 80M |
+| `tts-zonos` | Zonos (GitHub, overlaid), espeakng-loader | Zyphra Zonos transformer (copies voices) |
+| `tts-neutts` | neutts, torch < 2.9, torchao 0.13, espeakng-loader | NeuTTS Air and Nano (copies voices) |
+| `tts-outetts` | outetts, torch/torchaudio < 2.9 | OuteTTS 1.0 |
+| `tts-indextts` | IndexTTS (GitHub); Python 3.11 | IndexTTS 2 (copies voices) |
+| `tts-vibevoice` | VibeVoice (GitHub) | VibeVoice Realtime 0.5B (25 preset voices from Microsoft's repo) |
+| `tts-vieneu` | vieneu, onnxruntime < 1.24 | VieNeu-TTS v3 Turbo (Vietnamese) |
+
+Some libraries need more than a pip install, and the engine spec says so: `python` (a venv
+made by `uv` with another Python, downloaded once to `engines/pythons`, for libraries with no
+3.12 wheels), and `overlays` (source folders copied from a pinned GitHub commit over the
+installed package, for packages that leave subpackages out). Libraries that fetch helper
+models by name on first load (a BERT, a codec, voice packs) get them in the backend's
+`prepare` step, right after the model downloads, into a Hugging Face cache shared by the
+workers (`models/hub`, set as `HF_HUB_CACHE`); workers run offline. Models that only copy
+voices offer four public-domain and CC BY **starter voices** so they can speak straight away.
+Each backend's `/voices` may also return `details` (display names, languages, genders).
+Backends for the newer engines live in `speech_more.py`, the shared base in `speech_base.py`.
+
+Runtimes are big (a private Python with PyTorch, 2 to 8 GB), so deleting the last model that
+uses one deletes the runtime too. Every install first checks free space (model + runtime if
+it isn't installed yet + a 5 GB margin) and refuses with a clear message rather than filling
+the disk.
 
 torchaudio 2.9+ decodes audio through torchcodec, which needs system FFmpeg libraries the
 image doesn't have, hence the pins. Models with a library Amy has no runtime for stay listed
@@ -156,6 +214,11 @@ profile it can't use falls back to a built-in voice. The browser converts record
 uploads to 16-bit mono WAV before upload, so neither the platform nor the workers need
 FFmpeg. OmniVoice describes voices with a fixed vocabulary (gender, age, pitch, accent,
 whisper), so free descriptions are mapped onto it (`omni_tags`).
+
+The **voice library** (`app/voice_library.py`) lists samples from Kyutai's `kyutai/tts-voices`
+repo, keeping the collections that may be used commercially (CC0 and CC BY 4.0). Installing
+one downloads the clip and stores it as an ordinary clone voice, with its `source` and the
+`credit` its license asks for.
 
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB

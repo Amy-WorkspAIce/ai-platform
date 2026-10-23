@@ -33,6 +33,8 @@ export function acceptsText(info: ModelVoices): string {
   const design = info.accepts.includes("design");
   if (!clone && !design) return "This model only uses its own voices.";
   if (!info.voices.length && clone) return "This model only speaks in a voice copied from a sample, so add one below.";
+  if (clone && Object.values(info.details ?? {}).some((d) => d.language === "Starter voices"))
+    return "This model speaks in a voice copied from a sample: start with these, or add your own below or from the voice library.";
   if (clone && design) return "This model can also use voices you describe and voices copied from a sample.";
   if (design) return "This model can also use voices you describe in words.";
   return info.needs_text
@@ -48,12 +50,15 @@ export function CustomVoices({
   api,
   speech,
   usable,
+  version = 0,
   onChanged,
 }: {
   api: Api;
   speech: ModelChoice;
   /** Ids of the voices the current model can use, or null if unknown. */
   usable: Set<string> | null;
+  /** Bump to reload the list (a voice was added elsewhere, e.g. from the voice library). */
+  version?: number;
   onChanged: () => void;
 }) {
   const [voices, setVoices] = useState<CustomVoice[] | null>(null);
@@ -68,7 +73,7 @@ export function CustomVoices({
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
+  }, [api, version]);
 
   function changed() {
     void load();
@@ -211,6 +216,7 @@ function VoiceRow({
               : "No words written down (some models need them: edit to add what the sample says)."}
         </p>
       )}
+      {voice.credit && <p className="muted small custom-voice-words">From the voice library: {voice.credit}</p>}
     </li>
   );
 }

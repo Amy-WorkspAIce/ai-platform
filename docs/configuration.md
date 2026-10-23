@@ -27,6 +27,7 @@ All settings are environment variables. None are required.
 | `AMY_UPSTREAM_TIMEOUT` | `600` | Seconds to wait on a model engine. |
 | `AMY_DATA_DIR` | `/data` | Persistent state directory. |
 | `AMY_PORT` | `8484` | Listen port inside the container. |
+| `AMY_HTTPS_PORT` | `8443` | The same app over HTTPS (`0` turns it off). Browsers only allow the microphone on HTTPS pages (or localhost). A self-signed certificate is made on first start in `/data/secrets/tls`; put your own `cert.pem` and `key.pem` there to use a real one. |
 | `PUID` / `PGID` | `1000` / `1000` | Owner of files in `/data`. Unraid uses `99` / `100`. |
 | `OLLAMA_MODELS` | `/data/ollama/models` | Where the bundled Ollama stores models. |
 | `NVIDIA_VISIBLE_DEVICES` | `all` | Which GPUs the bundled Ollama can use. |

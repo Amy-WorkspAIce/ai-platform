@@ -8,8 +8,10 @@ import { LibraryView } from "./views/LibraryView";
 import { MemoryView } from "./views/MemoryView";
 import { ModelsView } from "./views/ModelsView";
 import { SettingsView } from "./views/SettingsView";
+import { VoicesView } from "./views/VoicesView";
+import { RulesView } from "./views/RulesView";
 
-export type View = "chat" | "library" | "memory" | "models" | "settings";
+export type View = "chat" | "library" | "memory" | "models" | "voices" | "rules" | "settings";
 
 export function App() {
   const [key, setKey] = useState(getApiKey);
@@ -19,6 +21,7 @@ export function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [error, setError] = useState("");
   const [view, setView] = useState<View>("chat");
+  const [rulesScope, setRulesScope] = useState("global");
   // chatKey remounts ChatView on explicit navigation only, so a chat that saves itself
   // mid-stream (getting an id) isn't remounted.
   const [chat, setChat] = useState<{ key: number; id: string | null; folderId: string | null }>({
@@ -93,6 +96,10 @@ export function App() {
     setView(v);
     setMenuOpen(false);
   };
+  const openRules = (scope: string) => {
+    setRulesScope(scope);
+    go("rules");
+  };
   const openChat = (id: string | null, folderId: string | null = null) => {
     setChat((c) => ({ key: c.key + 1, id, folderId }));
     go("chat");
@@ -116,7 +123,7 @@ export function App() {
           + New chat
         </button>
         <nav>
-          {(["chat", "library", "memory", "models", "settings"] as View[]).map((v) => (
+          {(["chat", "library", "memory", "models", "voices", "rules", "settings"] as View[]).map((v) => (
             <button key={v} className={view === v ? "active" : ""} onClick={() => go(v)}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
@@ -132,6 +139,7 @@ export function App() {
           onChanged={refreshConversations}
           onDeleted={(id) => chat.id === id && openChat(null)}
           onError={handleError}
+          onOpenRules={(folderId) => openRules(`folder:${folderId}`)}
         />
       </aside>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
@@ -160,11 +168,14 @@ export function App() {
               void refreshConversations();
             }}
             onBrowseModels={() => go("models")}
+            onOpenRules={openRules}
           />
         )}
+        {view === "rules" && <RulesView key={rulesScope} api={api} folders={folders} initialScope={rulesScope} />}
         {view === "library" && <LibraryView api={api} onNewChat={() => openChat(null)} />}
         {view === "memory" && <MemoryView api={api} onOpenChat={(id) => openChat(id)} />}
-        {view === "settings" && <SettingsView api={api} onSignOut={logout} />}
+        {view === "settings" && <SettingsView api={api} onSignOut={logout} onOpenVoices={() => go("voices")} />}
+        {view === "voices" && <VoicesView api={api} onBrowseModels={() => go("models")} />}
         {view === "models" && (
           <ModelsView
             api={api}

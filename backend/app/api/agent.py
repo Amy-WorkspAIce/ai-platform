@@ -17,7 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import context, memory
+from app import context, memory, routing
+from app import rules as rulesets
 from app.agent import ModelError, history_with_ids, run_agent
 from app.db import Database
 from app.security import require_api_key
@@ -25,6 +26,9 @@ from app.tools import Toolset, Workspace, web_tools, workspace_tools
 from app.tools.creative import creative_prompt, creative_tools
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
+
+# Memory updates still running after their chat stream closed (kept so they aren't collected).
+_learning: set[asyncio.Task] = set()
 
 WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -47,6 +51,12 @@ Use them for live or recent information instead of guessing, then answer from wh
 and cite the pages as markdown links. Prefer official sources; if sources disagree, say so.
 If a tool fails, don't keep retrying it. Try one other approach (e.g. fetch_url on a site you \
 know) or tell the user what didn't work."""
+
+MEMORY_PROMPT = """You have long-term memory. After each reply, facts the user shares about \
+themselves (who they are, people and pets in their life, preferences, projects, anything they \
+ask you to remember) are saved automatically, and relevant ones are given to you in later \
+chats. The user can see and edit them on the Memory page. So never say you can't remember \
+things between chats; when asked to remember something, say you'll remember it."""
 
 NO_WEB_PROMPT = """You do NOT have web access (it's turned off in Settings). If the user needs \
 live or recent information, say so briefly and help with what you do know."""
@@ -129,6 +139,8 @@ def system_prompt(
     web: bool | None = None,
     creative: str | None = None,
     memories: str | None = None,
+    memory_on: bool = False,
+    rules: str | None = None,
 ) -> str:
     parts = [BASE_PROMPT.format(today=f"{date.today():%A, %B %d, %Y}")]
     if req.mode == "agent" and ws is not None:
@@ -140,6 +152,10 @@ def system_prompt(
     parts.append(WEB_PROMPT if web else NO_WEB_PROMPT)
     if creative:
         parts.append(creative)
+    if rules:
+        parts.append(rules)
+    if memory_on:
+        parts.append(MEMORY_PROMPT)
     if memories:
         parts.append(memories)
     return "\n\n".join(parts)
@@ -148,9 +164,21 @@ def system_prompt(
 @router.post("/agent/chat")
 async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingResponse:
     state = request.app.state
-    resolved = state.providers.resolve(req.model)
+    db: Database = state.db
+    model, purpose = req.model, None
+    if req.model == routing.AUTO:
+        # Auto: coding work goes to the coding model, everything else to the chat model. A chat
+        # that turned to code stays with the coding model for its follow-ups.
+        prior = db.get_conversation(req.conversation_id) if req.conversation_id else None
+        was_coding = (((prior or {}).get("settings") or {}).get("purpose")) == "coding"
+        coding = req.mode == "agent" or was_coding or routing.looks_like_code(req.message)
+        purpose = "coding" if coding else "chat"
+        model = await routing.pick(request.app, purpose)
+        if model is None:
+            raise HTTPException(404, "No chat model is installed yet")
+    resolved = state.providers.resolve(model)
     if resolved is None:
-        raise HTTPException(404, f"Unknown model '{req.model}'")
+        raise HTTPException(404, f"Unknown model '{model}'")
     provider, upstream = resolved
 
     toolset = Toolset()
@@ -170,8 +198,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     for tool in media_tools:
         toolset.add(tool)
 
-    db: Database = state.db
-    settings = {"mode": req.mode, "web": web, "workspace": req.workspace}
+    settings = {"mode": req.mode, "web": web, "workspace": req.workspace, "purpose": purpose}
     summary: str | None = None
     summary_upto: str | None = None
     if req.conversation_id:
@@ -185,15 +212,32 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         conv = db.create_conversation(title_from(req.message), req.model, settings)
         if req.folder_id and req.folder_id in {f["id"] for f in db.list_folders()}:
             db.update_conversation(conv["id"], folder_id=req.folder_id)
+            conv["folder_id"] = req.folder_id
         history, history_ids = [], []
     conv_id = conv["id"]
     db.add_message(conv_id, "user", req.message)
 
     us = state.user_settings
+    rules = rulesets.effective(db, conv.get("folder_id"), ws and req.workspace, req.mode)
+    project = rulesets.project_rules(ws.root) if ws else []
+    # A panel of other models, only when a rule asks for one: offered unasked, small models
+    # consult it for everything.
+    if rulesets.wants_panel(rules, project):
+        others = await rulesets.chat_model_ids(request.app)
+        if len(others) > 1:
+            toolset.add(rulesets.ask_models_tool(request.app, others))
     recalled = await memory.recall(request.app, req.message) if us.memory_enabled else []
     system = system_prompt(
-        req, ws, web, creative_prompt(media_tools), memory.recall_prompt(recalled)
+        req,
+        ws,
+        web,
+        creative_prompt(media_tools),
+        memory.recall_prompt(recalled),
+        memory_on=us.memory_enabled and us.memory_auto,
+        rules=rulesets.prompt(rules, project),
     )
+    # What the user said earlier in this chat, so "remember that" can refer back to it.
+    earlier = [m["content"] for m in history if m.get("role") == "user" and m.get("content")]
 
     # Context budget for the conversation itself: window minus system prompt, tool
     # definitions, the new message and room for the reply.
@@ -209,7 +253,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         if msg["role"] == "assistant" and msg.get("content"):
             replies.append(msg["content"])
         db.add_message(
-            conv_id, msg["role"], msg["content"], msg.get("reasoning"), req.model, msg.get("meta")
+            conv_id, msg["role"], msg["content"], msg.get("reasoning"), model, msg.get("meta")
         )
 
     async def condense() -> None:
@@ -239,13 +283,22 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         """Update long-term memory from this exchange (after the answer is shown)."""
         if not (us.memory_enabled and us.memory_auto and replies):
             return
+        # Coding models follow the memory instructions poorly (they "remember" facts about the
+        # code), so a general chat model does this when one is installed.
+        mem_provider, mem_model = provider, upstream
+        if routing.is_coder(model):
+            general = await routing.pick(request.app, "chat")
+            found = state.providers.resolve(general) if general else None
+            if found and not routing.is_coder(general):
+                mem_provider, mem_model = found
         changes = await memory.extract(
             request.app,
-            provider=provider,
-            model=upstream,
+            provider=mem_provider,
+            model=mem_model,
             user_message=req.message,
             assistant_reply=replies[-1],
             conversation_id=conv_id,
+            earlier=earlier[-memory.EARLIER_TURNS :],
         )
         for change in changes:
             await run.emit({"type": "memory", **change})
@@ -276,7 +329,12 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
                 - context.estimate_tokens(toolset.schemas()),
             )
             await run.emit({"type": "answer_done"})
-            await learn()
+            # Leaving the chat closes the stream and cancels this run; the memory update (slow
+            # with reasoning models) must survive that, so it runs as its own task.
+            task = asyncio.create_task(learn())
+            _learning.add(task)
+            task.add_done_callback(_learning.discard)
+            await asyncio.shield(task)
         except ModelError as exc:
             await run.emit({"type": "error", "message": str(exc)})
         except Exception as exc:  # surface anything unexpected to the user
@@ -289,6 +347,8 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         task = asyncio.create_task(work())
         try:
             yield sse({"type": "start", "run_id": run.id, "conversation_id": conv_id})
+            if purpose:
+                yield sse({"type": "model", "model": model, "purpose": purpose})
             while True:
                 event = await run.queue.get()
                 yield sse(event)
@@ -410,3 +470,4 @@ async def create_workspace(request: Request, body: WorkspaceCreate) -> dict:
 async def delete_workspace(request: Request, name: str) -> None:
     ws = get_workspace(request, name)
     await asyncio.to_thread(shutil.rmtree, ws.root)
+    request.app.state.db.delete_scope(rulesets.workspace_scope(name))

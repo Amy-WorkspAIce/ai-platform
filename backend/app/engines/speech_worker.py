@@ -9,15 +9,8 @@ Every backend turns text into float samples at some rate; the worker encodes the
 Unknown voices fall back to the backend's default, since the platform's default voice may
 belong to another model.
 
-**Custom voices.** Besides its built-in voices, a backend may accept the user's own voices,
-which the platform sends as ``profile``:
-
-- ``{"kind": "clone", "audio": "/data/voices/x.wav", "text": "what the clip says" | None}``:
-  speak like a short recording. Some backends need the clip's transcript (``needs_text``).
-- ``{"kind": "design", "description": "A calm older man with a deep voice"}``: a voice
-  described in words.
-
-``/voices`` reports which kinds a model accepts, so the platform only offers voices it can use.
+Custom voices and starter voices are described in ``speech_base``. Backends for the newer
+engines live in ``speech_more``.
 """
 
 import io
@@ -27,78 +20,32 @@ import threading
 from pathlib import Path
 
 import _worker_common as common
+import speech_more
+from speech_base import DEFAULT, DESIGNS, Backend, starter  # noqa: F401 - re-exported
+from speech_base import device as _device
+from speech_base import numpy as _numpy
 
 _lock = threading.Lock()
-_loaded: dict[str, "Backend"] = {}
+_loaded: dict[str, Backend] = {}
 FORMATS = {"wav": ("WAV", "audio/wav"), "flac": ("FLAC", "audio/flac"), "ogg": ("OGG", "audio/ogg")}
-DEFAULT = "default"
-
-# Ready-made described voices, for models that make a voice from a description.
-DESIGNS = {
-    "Warm narrator": "A middle-aged man with a warm, deep and calm voice, like an audiobook "
-    "narrator.",
-    "Bright host": "A young woman with a bright, friendly and upbeat voice.",
-    "Gentle storyteller": "An elderly woman with a soft, gentle and kind voice.",
-    "Newsreader": "A man in his thirties with a clear, confident and neutral newsreader voice.",
-    "Soft whisper": "A young woman whispering softly and slowly.",
-    "Lively teen": "A teenage boy with an energetic, fast and cheerful voice.",
-}
-
-
-def _device() -> str:
-    import torch
-
-    return "cuda" if torch.cuda.is_available() else "cpu"
-
-
-def _numpy(audio):
-    import numpy as np
-
-    if hasattr(audio, "detach"):
-        audio = audio.detach().float().cpu().numpy()
-    return np.asarray(audio, dtype=np.float32).squeeze()
-
-
-class Backend:
-    # Which custom voice kinds this backend accepts, and whether clones need a transcript.
-    accepts: tuple[str, ...] = ()
-    needs_text = False
-
-    def __init__(self, model_dir: Path, config: dict):
-        self.dir = model_dir
-        self.config = config
-
-    def voices(self) -> list[str]:
-        return [DEFAULT]
-
-    def speak(self, text: str, voice: str | None, speed: float, profile: dict | None = None):
-        raise NotImplementedError
-
-    def info(self) -> dict:
-        return {
-            "voices": self.voices(),
-            "accepts": list(self.accepts),
-            "needs_text": self.needs_text,
-        }
-
-    def check(self, profile: dict | None) -> dict | None:
-        """The profile if this backend can use it (else None: use a built-in voice)."""
-        if not profile or profile.get("kind") not in self.accepts:
-            return None
-        if profile["kind"] == "clone" and self.needs_text and not profile.get("text"):
-            raise ValueError("This model needs the words spoken in the voice sample")
-        return profile
-
-    @staticmethod
-    def described(voice: str | None, profile: dict | None) -> str | None:
-        """The description to speak with: the user's designed voice or a ready-made one."""
-        if profile and profile["kind"] == "design":
-            return profile["description"]
-        return DESIGNS.get(voice or "")
 
 
 class Transformers(Backend):
-    """VITS/MMS (one voice, 1,100+ languages) and Bark (voice presets) via transformers."""
+    """VITS/MMS (one voice, 1,100+ languages) and Bark (voice presets) via transformers.
+    Sesame CSM, also native to transformers, has its own class."""
+
+    def __new__(cls, model_dir, config):
+        model_type = json.loads((model_dir / "config.json").read_text()).get("model_type")
+        other = speech_more.TRANSFORMERS.get(model_type)
+        # Returning an instance of another class skips this class's __init__.
+        return other(model_dir, config) if other else super().__new__(cls)
+
+    @staticmethod
+    def prepare(dest, config):
+        model_type = json.loads((dest / "config.json").read_text()).get("model_type")
+        other = speech_more.TRANSFORMERS.get(model_type)
+        if other:
+            other.prepare(dest, config)
 
     def __init__(self, model_dir, config):
         super().__init__(model_dir, config)
@@ -179,6 +126,7 @@ class F5(Backend):
         )
         vocab = next(iter(sorted(model_dir.rglob("vocab.txt"))), None)
         self.model = F5TTS(
+            model=config.get("model", "F5TTS_v1_Base"),
             ckpt_file=str(ckpts[-1]),
             vocab_file=str(vocab) if vocab else "",
             vocoder_local_path=str(model_dir / "vocos"),
@@ -250,14 +198,19 @@ class Qwen(Backend):
         self.model = Qwen3TTSModel.from_pretrained(str(model_dir), device_map=_device())
         self.kind = getattr(self.model.model, "tts_model_type", "custom_voice")
         self.accepts = {"voice_design": ("design",), "base": ("clone",)}.get(self.kind, ())
+        self.starters = self.kind == "base"
         self.speakers = list(self.model.get_supported_speakers() or [])
         self.prompts: dict[str, object] = {}
+
+    @staticmethod
+    def prepare(dest, config):
+        speech_more.fetch_starters()  # for Base models; a few MB
 
     def voices(self):
         if self.kind == "voice_design":
             return list(DESIGNS)
         if self.kind == "base":
-            return []  # only the user's own voices
+            return super().voices()  # starter voices; the user's own come from the platform
         return self.speakers or [DEFAULT]
 
     def speak(self, text, voice, speed, profile=None):
@@ -266,10 +219,7 @@ class Qwen(Backend):
             description = self.described(voice, profile) or next(iter(DESIGNS.values()))
             wavs, sr = self.model.generate_voice_design(text=text, instruct=description)
         elif self.kind == "base":
-            if not profile:
-                raise ValueError(
-                    "This model speaks in a voice you give it: add a voice sample in Settings first"
-                )
+            profile = self.clone(voice, profile)
             ref_text = profile.get("text") or None
             key = f"{profile['audio']}|{ref_text}"
             if key not in self.prompts:
@@ -404,7 +354,7 @@ class VoxCpm(Backend):
         return _numpy(wav), self.model.tts_model.sample_rate
 
 
-BACKENDS = {
+BACKENDS: dict[str, type[Backend]] = {
     "transformers": Transformers,
     "chatterbox": Chatterbox,
     "f5": F5,
@@ -413,6 +363,7 @@ BACKENDS = {
     "omnivoice": OmniVoice,
     "voxcpm": VoxCpm,
 }
+BACKENDS.update(speech_more.BACKENDS)
 
 
 def _model(body: dict) -> Backend:
@@ -448,9 +399,13 @@ def voices(body: dict) -> common.Response:
 
 
 def after_download(dest: Path, config: dict) -> None:
-    """Fetch the extra repos a runtime needs next to the model (e.g. F5-TTS's vocoder)."""
+    """Fetch the extra repos a runtime needs next to the model (e.g. F5-TTS's vocoder), then
+    whatever the backend's library would otherwise download on first load."""
     for name, spec in (config.get("extras") or {}).items():
         common.download(spec, dest / name)
+    prepare = getattr(BACKENDS.get(config.get("backend", "")), "prepare", None)
+    if prepare:
+        prepare(dest, config)
 
 
 if __name__ == "__main__":

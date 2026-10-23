@@ -13,11 +13,13 @@ import time
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from app import studio
+from app import voice_library as library
 from app import voices as custom
 from app.delegation import choose
 from app.security import require_api_key
@@ -274,6 +276,8 @@ async def voices(request: Request, model: str) -> dict:
     info = resp.json()
     return {
         "voices": info["voices"],
+        # Display names, languages and genders, for voices whose ids don't say.
+        "details": info.get("details") or {},
         "accepts": info.get("accepts", []),
         "needs_text": info.get("needs_text", False),
         "custom": custom.usable(request.app, info),
@@ -375,6 +379,72 @@ async def voice_from_speech(request: Request, body: VoiceFromSpeech) -> dict:
         body.name.strip(), "clone", transcript=body.text, seconds=seconds, voice_id=voice_id
     )
     return custom.public(voice)
+
+
+@api.get("/voices/library")
+async def voice_library(request: Request) -> dict:
+    """Ready-made voice samples to install as your own voices (see ``app.voice_library``)."""
+    try:
+        found = await library.listing(request.app.state.http, _hf_token(request))
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Couldn't reach Hugging Face: {exc}") from exc
+    installed = {
+        v["source"]: custom.PREFIX + v["id"]
+        for v in request.app.state.db.list_voices()
+        if v.get("source")
+    }
+    return {
+        "voices": [e | {"installed": installed.get(f"{library.REPO}:{e['id']}")} for e in found]
+    }
+
+
+class LibraryVoice(BaseModel):
+    id: str = Field(min_length=1, max_length=300)
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+
+
+@api.post("/voices/library", status_code=201)
+async def install_library_voice(request: Request, body: LibraryVoice) -> dict:
+    """Install a voice library sample as a custom voice (transcribed if a speech-to-text
+    model is installed)."""
+    try:
+        entry = next(
+            e
+            for e in await library.listing(request.app.state.http, _hf_token(request))
+            if e["id"] == body.id
+        )
+    except StopIteration:
+        raise HTTPException(404, "That voice isn't in the library") from None
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Couldn't reach Hugging Face: {exc}") from exc
+    source = f"{library.REPO}:{entry['id']}"
+    db = request.app.state.db
+    if any(v.get("source") == source for v in db.list_voices()):
+        raise HTTPException(409, "That voice is already installed")
+    try:
+        data = await library.download(request.app.state.http, _hf_token(request), entry["id"])
+        seconds = custom.wav_seconds(data)
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Couldn't download the voice: {exc}") from exc
+    except custom.VoiceError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    voice_id = uuid.uuid4().hex
+    path = custom.clip_path(request.app, voice_id)
+    path.write_bytes(data)
+    voice = db.add_voice(
+        (body.name or entry["name"]).strip(),
+        "clone",
+        transcript=await _transcribe_clip(request, path),
+        seconds=seconds,
+        voice_id=voice_id,
+        source=source,
+        credit=entry["credit"],
+    )
+    return custom.public(voice)
+
+
+def _hf_token(request: Request) -> str | None:
+    return request.app.state.user_settings.hf_token
 
 
 class VoiceUpdate(BaseModel):

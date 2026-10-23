@@ -127,23 +127,18 @@ async def summarize(
     if previous:
         body = f"PREVIOUS SUMMARY:\n{previous}\n\nCONTINUATION:\n{body}"
     try:
-        resp = await client.post(
-            provider.url("chat/completions"),
-            json={
+        text = await provider.quick_reply(
+            client,
+            {
                 "model": model,
                 "messages": [
                     {"role": "system", "content": SUMMARY_PROMPT},
                     {"role": "user", "content": body},
                 ],
-                "stream": False,
                 "temperature": 0.2,
                 "max_tokens": 700,
             },
-            headers=provider.headers(),
-            timeout=300,
         )
-        resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"].get("content") or ""
     except (httpx.HTTPError, ValueError, KeyError, IndexError) as exc:
         log.warning("Summarization failed: %s", exc)
         return None

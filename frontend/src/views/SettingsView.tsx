@@ -1,20 +1,9 @@
 import { useEffect, useState } from "react";
-import { Api, getPref, setPref, type AppSettings, type ModelVoices } from "../api";
-import {
-  MIC_PREF,
-  SPEAKER_PREF,
-  canChooseSpeaker,
-  describeVoice,
-  routeAudio,
-  sampleText,
-  useAudioDevices,
-  useDevicePref,
-} from "../devices";
-import { Icon } from "../icons";
+import { Api, getPref, setPref, type AppSettings } from "../api";
+import { MIC_PREF, SPEAKER_PREF, canChooseSpeaker, useAudioDevices, useDevicePref } from "../devices";
 import { canRecord } from "../recorder";
-import { CustomVoices, acceptsText } from "./CustomVoices";
 
-type Props = { api: Api; onChanged?: () => void; onSignOut: () => void };
+type Props = { api: Api; onChanged?: () => void; onSignOut: () => void; onOpenVoices?: () => void };
 
 type Theme = "dark" | "light" | "system";
 
@@ -23,7 +12,7 @@ function applyTheme(theme: Theme) {
   else document.documentElement.setAttribute("data-theme", theme);
 }
 
-export function SettingsView({ api, onChanged, onSignOut }: Props) {
+export function SettingsView({ api, onChanged, onSignOut, onOpenVoices }: Props) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState("");
 
@@ -57,7 +46,7 @@ export function SettingsView({ api, onChanged, onSignOut }: Props) {
         onChange={(models) => setSettings({ ...settings, models })}
       />
 
-      <VoiceAndDevices api={api} settings={settings} onVoice={(voice) => setSettings({ ...settings, voice })} />
+      <Devices onOpenVoices={onOpenVoices} />
 
       <section className="card setting">
         <div className="setting-head">
@@ -257,6 +246,8 @@ function HuggingFace({
 
 
 const CAPABILITY_LABEL: Record<string, { title: string; hint: string }> = {
+  chat: { title: "Chat", hint: "Answers everyday questions when the chat box is on Auto." },
+  coding: { title: "Coding", hint: "Used on Auto for workspace tasks and questions about code." },
   image: { title: "Images", hint: "Used when you ask chat to create or edit an image." },
   video: { title: "Video", hint: "Used when you ask chat for a video clip." },
   speech: { title: "Voice (text to speech)", hint: "Used for read-aloud and when chat speaks." },
@@ -287,8 +278,9 @@ function DefaultModels({
     <section className="card setting">
       <h2>Models</h2>
       <p className="muted small">
-        Chat hands work off to these models. <strong>Best installed</strong> picks the most capable installed model that
-        runs well on your hardware, so you don't need to change anything here unless you want a specific one.
+        With the chat box on <strong>Auto</strong>, Amy sends each message to the right model and hands work off to the
+        others. <strong>Best installed</strong> picks the most capable installed model that runs well on your hardware, so
+        you don't need to change anything here unless you want a specific one.
       </p>
       <div className="model-defaults">
         {(Object.keys(CAPABILITY_LABEL) as (keyof AppSettings["models"])[]).map((cap) => {
@@ -321,132 +313,23 @@ function DefaultModels({
   );
 }
 
-const YOURS = "Your voices";
-
-function VoiceAndDevices({
-  api,
-  settings,
-  onVoice,
-}: {
-  api: Api;
-  settings: AppSettings;
-  onVoice: (voice: string | null) => void;
-}) {
-  const speech = settings.models.speech;
-  const model = speech.pinned ?? speech.best;
-  const [info, setInfo] = useState<ModelVoices | null>(null);
-  const [lang, setLang] = useState("");
-  const [playing, setPlaying] = useState("");
+function Devices({ onOpenVoices }: { onOpenVoices?: () => void }) {
   const [error, setError] = useState("");
   const devices = useAudioDevices();
   const [mic, setMic] = useDevicePref(MIC_PREF);
   const [speaker, setSpeaker] = useDevicePref(SPEAKER_PREF);
 
-  const loadVoices = () => {
-    if (!model) return;
-    api
-      .voices(model)
-      .then(setInfo)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadVoices, [api, model]);
-
-  const voices = info?.voices ?? null;
-  const own = new Map((info?.custom ?? []).map((v) => [v.id, v]));
-  const current = settings.voice ?? info?.voices[0] ?? "af_heart";
-  const label = (v: string) => (own.has(v) ? { name: own.get(v)!.name, language: YOURS, gender: "" } : describeVoice(v));
-  const byLang = new Map<string, string[]>();
-  for (const v of [...(voices ?? []), ...own.keys()]) {
-    const l = label(v).language;
-    byLang.set(l, [...(byLang.get(l) ?? []), v]);
-  }
-  const shownLang = byLang.has(lang) ? lang : byLang.has(label(current).language) ? label(current).language : [...byLang.keys()][0];
-
-  async function preview(voice: string) {
-    if (!model) return;
-    setPlaying(voice);
-    try {
-      const text = own.has(voice) ? `Hi, I'm ${own.get(voice)!.name}, one of your voices.` : sampleText(voice);
-      const url = URL.createObjectURL(await api.speak(model, text, voice));
-      const a = new Audio(url);
-      routeAudio(a);
-      a.onended = () => {
-        setPlaying("");
-        URL.revokeObjectURL(url);
-      };
-      await a.play();
-    } catch (e) {
-      setPlaying("");
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function choose(voice: string) {
-    setError("");
-    try {
-      onVoice((await api.saveVoice(voice)).voice);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
   return (
     <section className="card setting">
-      <h2>Voices and devices</h2>
-      <h3 className="setting-sub">Voice</h3>
-      {!model ? (
-        <p className="muted small">Install a text-to-speech model (such as Kokoro) from Models to choose a voice.</p>
-      ) : !voices ? (
-        <p className="muted small">{error ? "" : "Loading voices…"}</p>
-      ) : (
-        <>
-          <p className="muted small">
-            Used for <strong>Read aloud</strong> and when chat speaks.{" "}
-            {voices.length > 0 && `The model comes with ${voices.length} voice${voices.length === 1 ? "" : "s"}, so there's nothing extra to download. `}
-            Press play to hear one. {info && acceptsText(info)}
-          </p>
-          <div className="segmented wrap" role="radiogroup" aria-label="Language">
-            {[...byLang.keys()].map((l) => (
-              <button key={l} role="radio" aria-checked={shownLang === l} className={shownLang === l ? "active" : ""} onClick={() => setLang(l)}>
-                {l}
-              </button>
-            ))}
-          </div>
-          <div className="voice-grid">
-            {(byLang.get(shownLang) ?? []).map((v) => {
-              const d = label(v);
-              return (
-                <div key={v} className={`voice ${v === current ? "selected" : ""}`}>
-                  <button className="icon-button" title={`Hear ${d.name}`} disabled={!!playing} onClick={() => void preview(v)}>
-                    {playing === v ? "…" : <Icon name="volume" size={14} label={`Hear ${d.name}`} />}
-                  </button>
-                  <span>
-                    <strong>{d.name}</strong>
-                    <span className="muted small"> {d.gender || (own.has(v) ? (own.get(v)!.kind === "clone" ? "Sample" : "Described") : "")}</span>
-                  </span>
-                  {v === current ? (
-                    <span className="tag tools">In use</span>
-                  ) : (
-                    <button className="link" onClick={() => void choose(v)}>
-                      Use
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
+      <h2>Microphone and speakers</h2>
+      {onOpenVoices && (
+        <p className="muted small">
+          Looking for voices?{" "}
+          <button className="link" onClick={onOpenVoices}>
+            They're on the Voices page
+          </button>
+        </p>
       )}
-
-      <CustomVoices
-        api={api}
-        speech={speech}
-        usable={info ? new Set(own.keys()) : null}
-        onChanged={loadVoices}
-      />
-
-      <h3 className="setting-sub">Microphone and speakers</h3>
       {!devices.supported ? (
         <p className="muted small">
           This browser can't list audio devices here (it needs HTTPS), so it uses the system defaults.

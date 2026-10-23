@@ -79,6 +79,23 @@ CREATE TABLE IF NOT EXISTS voices (
     seconds REAL,
     created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    text TEXT NOT NULL,
+    scope TEXT NOT NULL DEFAULT 'global',  -- global, folder:<id> or workspace:<name>
+    applies TEXT NOT NULL DEFAULT 'always',  -- always, chat or agent
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rules_scope ON rules(scope);
+-- Rules from a wider scope turned off in a narrower one (a global rule off in one folder).
+CREATE TABLE IF NOT EXISTS rule_exclusions (
+    scope TEXT NOT NULL,
+    rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+    PRIMARY KEY (scope, rule_id)
+);
 """
 
 
@@ -94,6 +111,9 @@ MIGRATIONS = [
     # Context management: summary of messages up to (and including) summary_upto.
     ("conversations", "summary", "TEXT"),
     ("conversations", "summary_upto", "TEXT"),
+    # Voices installed from the voice library: where they came from, and the credit owed.
+    ("voices", "source", "TEXT"),
+    ("voices", "credit", "TEXT"),
 ]
 
 
@@ -305,6 +325,8 @@ class Database:
         transcript: str | None = None,
         seconds: float | None = None,
         voice_id: str | None = None,
+        source: str | None = None,
+        credit: str | None = None,
     ) -> dict:
         row = {
             "id": voice_id or new_id(),
@@ -314,11 +336,14 @@ class Database:
             "transcript": transcript,
             "seconds": seconds,
             "created_at": time.time(),
+            "source": source,
+            "credit": credit,
         }
         with self.connect() as db:
             db.execute(
-                "INSERT INTO voices VALUES (:id, :name, :kind, :description, :transcript, "
-                ":seconds, :created_at)",
+                "INSERT INTO voices (id, name, kind, description, transcript, seconds, "
+                "created_at, source, credit) VALUES (:id, :name, :kind, :description, "
+                ":transcript, :seconds, :created_at, :source, :credit)",
                 row,
             )
         return row
@@ -388,7 +413,9 @@ class Database:
             db.execute(
                 "UPDATE conversations SET folder_id = NULL WHERE folder_id = ?", (folder_id,)
             )
-            return db.execute("DELETE FROM folders WHERE id = ?", (folder_id,)).rowcount > 0
+            deleted = db.execute("DELETE FROM folders WHERE id = ?", (folder_id,)).rowcount > 0
+        self.delete_scope(f"folder:{folder_id}")
+        return deleted
 
     # ---- memories ----
 
@@ -461,6 +488,92 @@ class Database:
     def delete_all_memories(self, user_id: str = "default") -> int:
         with self.connect() as db:
             return db.execute("DELETE FROM memories WHERE user_id = ?", (user_id,)).rowcount
+
+    # ---- rules ----
+
+    def list_rules(self, scopes: list[str] | None = None) -> list[dict]:
+        with self.connect() as db:
+            if scopes is None:
+                rows = db.execute("SELECT * FROM rules ORDER BY created_at").fetchall()
+            else:
+                marks = ",".join("?" * len(scopes))
+                query = f"SELECT * FROM rules WHERE scope IN ({marks}) ORDER BY created_at"  # noqa: S608 - placeholders only
+                rows = db.execute(query, scopes).fetchall()
+        return [_rule(r) for r in rows]
+
+    def get_rule(self, rule_id: str) -> dict | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM rules WHERE id = ?", (rule_id,)).fetchone()
+        return _rule(row) if row else None
+
+    def add_rule(self, name: str, text: str, scope: str, applies: str) -> dict:
+        now = time.time()
+        row = {
+            "id": new_id(),
+            "name": name,
+            "text": text,
+            "scope": scope,
+            "applies": applies,
+            "enabled": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO rules (id, name, text, scope, applies, enabled, created_at, "
+                "updated_at) VALUES (:id, :name, :text, :scope, :applies, :enabled, "
+                ":created_at, :updated_at)",
+                row,
+            )
+        return _rule(row)
+
+    def update_rule(self, rule_id: str, **fields) -> dict | None:
+        allowed = {k: v for k, v in fields.items() if k in ("name", "text", "applies", "enabled")}
+        if allowed:
+            if "enabled" in allowed:
+                allowed["enabled"] = int(bool(allowed["enabled"]))
+            sets = ", ".join(f"{k} = :{k}" for k in allowed)
+            with self.connect() as db:
+                query = f"UPDATE rules SET {sets}, updated_at = :now WHERE id = :id"  # noqa: S608 - keys whitelisted
+                db.execute(query, allowed | {"id": rule_id, "now": time.time()})
+        return self.get_rule(rule_id)
+
+    def delete_rule(self, rule_id: str) -> bool:
+        with self.connect() as db:
+            return db.execute("DELETE FROM rules WHERE id = ?", (rule_id,)).rowcount > 0
+
+    def delete_scope(self, scope: str) -> None:
+        """A folder or workspace is gone: so are its rules and its exclusions."""
+        with self.connect() as db:
+            db.execute("DELETE FROM rules WHERE scope = ?", (scope,))
+            db.execute("DELETE FROM rule_exclusions WHERE scope = ?", (scope,))
+
+    def rule_exclusions(self, scopes: list[str]) -> set[str]:
+        if not scopes:
+            return set()
+        marks = ",".join("?" * len(scopes))
+        with self.connect() as db:
+            query = f"SELECT rule_id FROM rule_exclusions WHERE scope IN ({marks})"  # noqa: S608 - placeholders only
+            rows = db.execute(query, scopes).fetchall()
+        return {r["rule_id"] for r in rows}
+
+    def set_rule_excluded(self, scope: str, rule_id: str, excluded: bool) -> None:
+        with self.connect() as db:
+            if excluded:
+                db.execute(
+                    "INSERT OR IGNORE INTO rule_exclusions (scope, rule_id) VALUES (?, ?)",
+                    (scope, rule_id),
+                )
+            else:
+                db.execute(
+                    "DELETE FROM rule_exclusions WHERE scope = ? AND rule_id = ?",
+                    (scope, rule_id),
+                )
+
+
+def _rule(row) -> dict:
+    d = dict(row)
+    return d | {"enabled": bool(d["enabled"])}
 
 
 def _conv(row: sqlite3.Row) -> dict:

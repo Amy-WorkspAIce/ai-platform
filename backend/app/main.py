@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__, hardware
 from app.agent import RunRegistry
-from app.api import agent, conversations, media, memory, models, openai, system
+from app.api import agent, conversations, media, memory, models, openai, rules, system
 from app.api import settings as settings_api
 from app.catalog.live import LiveCatalog
 from app.config import Settings, get_settings
@@ -91,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(conversations.folders)
     app.include_router(memory.router)
     app.include_router(agent.router)
+    app.include_router(rules.router)
     app.include_router(settings_api.router)
     app.include_router(media.api)
     app.include_router(media.v1)

@@ -97,6 +97,19 @@ export class Api {
     this.request<Folder>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
   deleteFolder = (id: string) => this.request<void>(`/api/folders/${id}`, { method: "DELETE" });
 
+  // ---- rules ----
+  rules = (scope: string) => this.request<RuleListing>(`/api/rules?scope=${encodeURIComponent(scope)}`);
+  addRule = (rule: Pick<Rule, "name" | "text" | "scope" | "applies">) =>
+    this.request<Rule>("/api/rules", { method: "POST", body: JSON.stringify(rule) });
+  updateRule = (id: string, patch: Partial<Pick<Rule, "name" | "text" | "applies" | "enabled">>) =>
+    this.request<Rule>(`/api/rules/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  deleteRule = (id: string) => this.request<void>(`/api/rules/${id}`, { method: "DELETE" });
+  setRuleExcluded = (id: string, scope: string, excluded: boolean) =>
+    this.request<{ excluded: boolean }>(`/api/rules/${id}/excluded`, {
+      method: "PUT",
+      body: JSON.stringify({ scope, excluded }),
+    });
+
   // ---- memory ----
   memory = (q?: string) => this.request<MemoryState>(`/api/memory${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   addFact = (text: string, category: string) =>
@@ -214,6 +227,9 @@ export class Api {
     });
   deleteVoice = (id: string) =>
     this.request<void>(`/api/voices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  voiceLibrary = () => this.request<{ voices: LibraryVoice[] }>("/api/voices/library");
+  installLibraryVoice = (id: string) =>
+    this.request<CustomVoice>("/api/voices/library", { method: "POST", body: JSON.stringify({ id }) });
   async voiceSampleUrl(id: string): Promise<string> {
     return URL.createObjectURL(await (await this.raw(`/api/voices/${encodeURIComponent(id)}/sample`)).blob());
   }
@@ -375,7 +391,7 @@ export type AppSettings = {
   web_access: boolean;
   /** Default text-to-speech voice; null = the model's own default. */
   voice: string | null;
-  models: Record<"image" | "video" | "speech" | "transcription", ModelChoice>;
+  models: Record<"chat" | "coding" | "image" | "video" | "speech" | "transcription", ModelChoice>;
 };
 
 export type GalleryAudio = {
@@ -449,6 +465,24 @@ export type ModelInfo = {
   fps?: number;
 };
 
+export type RuleApplies = "always" | "chat" | "agent";
+
+export type Rule = {
+  id: string;
+  name: string;
+  text: string;
+  scope: string;
+  applies: RuleApplies;
+  enabled: boolean;
+};
+
+export type RuleListing = {
+  scope: string;
+  rules: Rule[];
+  inherited: (Rule & { excluded: boolean })[];
+  project: { name: string; text: string }[];
+};
+
 export type ChatSettings = { mode?: "chat" | "agent"; web?: boolean; workspace?: string | null };
 
 export type Folder = { id: string; name: string; position: number; collapsed: boolean; created_at: number };
@@ -509,6 +543,7 @@ export type AgentRequest = {
 
 export type AgentEvent =
   | { type: "start"; run_id: string; conversation_id: string }
+  | { type: "model"; model: string; purpose: "chat" | "coding" }
   | { type: "text" | "reasoning"; delta: string }
   | {
       type: "tool_call";
@@ -521,7 +556,7 @@ export type AgentEvent =
   | { type: "tool_result"; id: string; ok: boolean; output: string; attachments?: Attachment[] }
   | { type: "notice"; message: string }
   | { type: "answer_done" }
-  | { type: "memory"; action: "remembered" | "updated" | "removed"; text: string }
+  | { type: "memory"; action: "remembered" | "updated" | "removed" | "failed"; text: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
@@ -638,11 +673,30 @@ export type CustomVoice = {
   seconds: number | null;
   created_at: number;
   transcribed?: boolean;
+  /** Installed from the voice library: where from, and the credit its license asks for. */
+  source?: string | null;
+  credit?: string | null;
 };
+
+/** A ready-made voice sample from the voice library. */
+export type LibraryVoice = {
+  id: string;
+  name: string;
+  collection: string;
+  language: string;
+  license: string;
+  credit: string;
+  preview: string;
+  installed: string | null; // the custom voice id, once installed
+};
+
+export type VoiceDetail = { name: string; language: string; gender: string };
 
 /** A speech model's voices: built-in ones, and the user's voices it can speak in. */
 export type ModelVoices = {
   voices: string[];
+  /** Names, languages and genders for voices whose ids don't say (absent for Kokoro). */
+  details?: Record<string, VoiceDetail>;
   accepts: ("clone" | "design")[];
   needs_text: boolean;
   custom: CustomVoice[];

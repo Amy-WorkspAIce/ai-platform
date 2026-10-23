@@ -18,6 +18,7 @@ API key: printed in the container log on first start and saved to appdata/secret
   <Icon>https://raw.githubusercontent.com/Amy-WorkspAIce/ai-platform/main/deploy/unraid/icon.png</Icon>
   <ExtraParams>--runtime=nvidia</ExtraParams>
   <Config Name="WebUI / API Port" Target="8484" Default="8484" Mode="tcp" Description="Web UI and API port." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
+  <Config Name="HTTPS Port" Target="8443" Default="8443" Mode="tcp" Description="The same web UI over HTTPS, with a self-signed certificate (your browser warns once). Browsers only allow the microphone, for dictation and recording voices, on HTTPS pages." Type="Port" Display="always" Required="false" Mask="false">8443</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/amy-ai-platform" Mode="rw" Description="All persistent data: settings, secrets, and downloaded models (models can be large; consider a cache/SSD pool)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/amy-ai-platform</Config>
   <Config Name="API Key" Target="AMY_API_KEY" Default="" Mode="" Description="Optional. Leave blank to auto-generate on first start (see container log)." Type="Variable" Display="always" Required="false" Mask="true"></Config>
   <Config Name="NVIDIA Visible Devices" Target="NVIDIA_VISIBLE_DEVICES" Default="all" Mode="" Description="GPU UUID(s) from the Nvidia Driver plugin page, or 'all'." Type="Variable" Display="always" Required="false" Mask="false">all</Config>
