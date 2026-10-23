@@ -18,10 +18,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from app import studio
+from app import studio, voice_meta
 from app import voice_library as library
 from app import voices as custom
 from app.delegation import choose
+from app.engines.speech_base import STARTERS
 from app.security import require_api_key
 from app.studio import StudioError
 
@@ -276,8 +277,10 @@ async def voices(request: Request, model: str) -> dict:
     info = resp.json()
     return {
         "voices": info["voices"],
-        # Display names, languages and genders, for voices whose ids don't say.
-        "details": info.get("details") or {},
+        # Names, languages, genders and other labels, for voices whose ids don't say.
+        "details": voice_meta.describe(
+            info["voices"], info.get("details") or {}, {n: p for n, (p, _, _) in STARTERS.items()}
+        ),
         "accepts": info.get("accepts", []),
         "needs_text": info.get("needs_text", False),
         "custom": custom.usable(request.app, info),

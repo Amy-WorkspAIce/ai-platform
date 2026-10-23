@@ -33,7 +33,7 @@ export function acceptsText(info: ModelVoices): string {
   const design = info.accepts.includes("design");
   if (!clone && !design) return "This model only uses its own voices.";
   if (!info.voices.length && clone) return "This model only speaks in a voice copied from a sample, so add one below.";
-  if (clone && Object.values(info.details ?? {}).some((d) => d.language === "Starter voices"))
+  if (clone && Object.values(info.details ?? {}).some((d) => d.group === "Starter voices"))
     return "This model speaks in a voice copied from a sample: start with these, or add your own below or from the voice library.";
   if (clone && design) return "This model can also use voices you describe and voices copied from a sample.";
   if (design) return "This model can also use voices you describe in words.";
@@ -427,7 +427,7 @@ function AddVoice({ api, speech, onDone }: { api: Api; speech: ModelChoice; onDo
                   {sourceVoices.map((v) => (
                     <option key={v} value={v}>
                       {describeVoice(v).name}
-                      {describeVoice(v).language !== "Voices" ? ` (${describeVoice(v).language})` : ""}
+                      {describeVoice(v).language ? ` (${describeVoice(v).language})` : ""}
                     </option>
                   ))}
                 </select>

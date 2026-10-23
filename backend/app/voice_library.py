@@ -11,17 +11,19 @@ import time
 
 import httpx
 
+from app import voice_meta
 from app.catalog.live import HF_API, hf_headers
 
-REPO = "kyutai/tts-voices"
+REPO = voice_meta.REPO
 TTL = 24 * 3600
 
-# Folder -> (collection, language, license, credit).
+# Folder -> (collection, language, license, credit). Each voice's own labels (gender, accent,
+# and so on) come from ``app.voice_meta``.
 COLLECTIONS = {
     "alba-mackenna": ("Alba MacKenna", "English", "CC BY 4.0", "Voice acting by Alba MacKenna"),
     "voice-zero": ("LibriVox readers", "English", "CC0", "Voice-Zero, from LibriVox"),
     "vctk": ("VCTK speakers", "English", "CC BY 4.0", "VCTK corpus, University of Edinburgh"),
-    "voice-donations": ("Donated voices", "English", "CC0", "Unmute voice donation project"),
+    "voice-donations": ("Donated voices", "", "CC0", "Unmute voice donation project"),
     "cml-tts/fr": ("French speakers", "French", "CC BY 4.0", "CML-TTS dataset"),
 }
 
@@ -41,7 +43,7 @@ def _name(folder: str, stem: str) -> str:
         return stem.replace("_", " ").title()
     if folder == "alba-mackenna":
         return f"Alba ({stem.replace('-', ' ')})"
-    return stem if not stem.isalnum() or not stem.islower() else f"Donor {stem}"
+    return f"Donor {stem}" if stem.isalnum() and stem == stem.lower() else stem
 
 
 def entries(files: list[str]) -> list[dict]:
@@ -58,12 +60,14 @@ def entries(files: list[str]) -> list[dict]:
                 continue
             enhanced = f"{prefix}{stem}_enhanced.wav"
             chosen = enhanced if enhanced in paths else path
+            meta = voice_meta.lookup(chosen)
             out.append(
-                {
+                meta
+                | {
                     "id": chosen,
                     "name": _name(folder, stem),
                     "collection": collection,
-                    "language": language,
+                    "language": meta.get("language", language),
                     "license": license_,
                     "credit": f"{credit} ({license_})",
                     "preview": file_url(chosen),

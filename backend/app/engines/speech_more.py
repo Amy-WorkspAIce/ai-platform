@@ -77,7 +77,7 @@ class Supertonic(Backend):
             v: {
                 "name": f"{gender.get(v[0], 'Voice')} {v[1:]}",
                 "language": "Voices",
-                "gender": "",
+                "gender": gender.get(v[0], ""),
             }
             for v in self.voices()
         }

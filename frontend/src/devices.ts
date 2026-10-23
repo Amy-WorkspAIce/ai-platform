@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getPref, setPref } from "./api";
+import { getPref, setPref, type VoiceDetail } from "./api";
 
 /**
  * Which microphone and speakers this browser uses. Saved per browser (a phone and a desktop
@@ -74,28 +74,29 @@ export function useDevicePref(name: string): [string, (id: string) => void] {
   ];
 }
 
-/** Kokoro voice ids look like "af_heart": language, gender, then the name. */
-const VOICE_LANG: Record<string, string> = {
-  a: "American English",
-  b: "British English",
-  e: "Spanish",
-  f: "French",
-  h: "Hindi",
-  i: "Italian",
-  j: "Japanese",
-  p: "Brazilian Portuguese",
-  z: "Mandarin Chinese",
+/** Kokoro voice ids look like "af_heart": language (and accent), gender, then the name. */
+const VOICE_LANG: Record<string, [string, string]> = {
+  a: ["English", "American"],
+  b: ["English", "British"],
+  e: ["Spanish", ""],
+  f: ["French", ""],
+  h: ["Hindi", ""],
+  i: ["Italian", ""],
+  j: ["Japanese", ""],
+  p: ["Portuguese", "Brazilian"],
+  z: ["Mandarin Chinese", ""],
 };
 
-export function describeVoice(id: string): { name: string; language: string; gender: string } {
+export function describeVoice(id: string): VoiceDetail {
   const m = id.match(/^([a-z])([fm])_(.+)$/);
   if (!m || !VOICE_LANG[m[1]]) {
     // Other engines name voices freely ("Ana Florence", "ryan", "v2/en_speaker_3").
     const name = id.split("/").pop()!.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    return { name, language: "Voices", gender: "" };
+    return { name };
   }
   const name = m[3].replace(/(^|_)(\w)/g, (_, sep: string, c: string) => (sep ? " " : "") + c.toUpperCase());
-  return { name, language: VOICE_LANG[m[1]] ?? "Other", gender: m[2] === "f" ? "Female" : "Male" };
+  const [language, accent] = VOICE_LANG[m[1]];
+  return { name, language, gender: m[2] === "f" ? "Female" : "Male", ...(accent ? { accent } : {}) };
 }
 
 /** A short line in the voice's own language, for previews. */

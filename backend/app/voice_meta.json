@@ -1,0 +1,1830 @@
+{
+ "alba-mackenna/a-moment-by": {
+  "gender": "Female",
+  "language": "English",
+  "style": "Storytelling"
+ },
+ "alba-mackenna/announcer": {
+  "gender": "Female",
+  "language": "English",
+  "style": "Announcer"
+ },
+ "alba-mackenna/casual": {
+  "gender": "Female",
+  "language": "English",
+  "style": "Casual"
+ },
+ "alba-mackenna/merchant": {
+  "gender": "Female",
+  "language": "English",
+  "style": "Character"
+ },
+ "cml-tts/fr/10087_11650_000028-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/10177_10625_000134-0003": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/10179_11051_000005-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/12080_11650_000047-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/12205_11650_000004-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/12977_10625_000037-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/1406_1028_000009-0003": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/1591_1028_000108-0004": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/1770_1028_000036-0002": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/2114_1656_000053-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/2154_2576_000020-0003": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/2216_1745_000007-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/2223_1745_000009-0002": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/2465_1943_000152-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/296_1028_000022-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/3267_1902_000075-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/4193_3103_000004-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/4482_3103_000063-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/4724_3731_000031-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/4937_3731_000004-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/5207_3078_000031-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/5476_3103_000072-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/577_394_000070-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/5790_4893_000052-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/579_2548_000015-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/5830_4703_000037-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/6318_7016_000027-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/7142_2432_000124-0003": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/7400_2928_000100-0001": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/7591_6742_000149-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/7601_7727_000062-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/7762_8734_000048-0002": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "French"
+ },
+ "cml-tts/fr/8128_7016_000047-0002": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/928_486_000075-0001": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "cml-tts/fr/9834_9697_000150-0003": {
+  "estimated": true,
+  "gender": "Male",
+  "language": "French"
+ },
+ "unmute-prod-website/default_voice": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "unmute-prod-website/degaulle-2": {
+  "gender": "Male",
+  "language": "French"
+ },
+ "unmute-prod-website/developer-1": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "unmute-prod-website/developpeuse-3": {
+  "gender": "Female",
+  "language": "French"
+ },
+ "unmute-prod-website/ex04_narration_longform_00001": {
+  "estimated": true,
+  "gender": "Female",
+  "style": "Narration"
+ },
+ "unmute-prod-website/fabieng-enhanced-v2": {
+  "gender": "Male",
+  "language": "French"
+ },
+ "unmute-prod-website/freesound/440565_why-is-there-educationwav": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "unmute-prod-website/freesound/519189_request-42---hmm-i-dont-knowwav": {},
+ "vctk/p225": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p226": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Surrey"
+ },
+ "vctk/p227": {
+  "accent": "English",
+  "age": 38,
+  "gender": "Male",
+  "language": "English",
+  "region": "Cumbria"
+ },
+ "vctk/p228": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p229": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p230": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Stockton-on-tees"
+ },
+ "vctk/p231": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p232": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p233": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Staffordshire"
+ },
+ "vctk/p234": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "West Dumfries"
+ },
+ "vctk/p236": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Manchester"
+ },
+ "vctk/p237": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Fife"
+ },
+ "vctk/p238": {
+  "accent": "Northern Irish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Belfast"
+ },
+ "vctk/p239": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "SW England"
+ },
+ "vctk/p240": {
+  "accent": "English",
+  "age": 21,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p241": {
+  "accent": "Scottish",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Perth"
+ },
+ "vctk/p243": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "London"
+ },
+ "vctk/p244": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Manchester"
+ },
+ "vctk/p245": {
+  "accent": "Irish",
+  "age": 25,
+  "gender": "Male",
+  "language": "English",
+  "region": "Dublin"
+ },
+ "vctk/p246": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Selkirk"
+ },
+ "vctk/p247": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Argyll"
+ },
+ "vctk/p248": {
+  "accent": "Indian",
+  "age": 23,
+  "gender": "Female",
+  "language": "English"
+ },
+ "vctk/p249": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Aberdeen"
+ },
+ "vctk/p250": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "SE England"
+ },
+ "vctk/p251": {
+  "accent": "Indian",
+  "age": 26,
+  "gender": "Male",
+  "language": "English"
+ },
+ "vctk/p252": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Edinburgh"
+ },
+ "vctk/p253": {
+  "accent": "Welsh",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Cardiff"
+ },
+ "vctk/p254": {
+  "accent": "English",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Surrey"
+ },
+ "vctk/p255": {
+  "accent": "Scottish",
+  "age": 19,
+  "gender": "Male",
+  "language": "English",
+  "region": "Galloway"
+ },
+ "vctk/p256": {
+  "accent": "English",
+  "age": 24,
+  "gender": "Male",
+  "language": "English",
+  "region": "Birmingham"
+ },
+ "vctk/p257": {
+  "accent": "English",
+  "age": 24,
+  "gender": "Female",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p258": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Southern England"
+ },
+ "vctk/p259": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Nottingham"
+ },
+ "vctk/p260": {
+  "accent": "Scottish",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Orkney"
+ },
+ "vctk/p261": {
+  "accent": "Northern Irish",
+  "age": 26,
+  "gender": "Female",
+  "language": "English",
+  "region": "Belfast"
+ },
+ "vctk/p262": {
+  "accent": "Scottish",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Edinburgh"
+ },
+ "vctk/p263": {
+  "accent": "Scottish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Aberdeen"
+ },
+ "vctk/p264": {
+  "accent": "Scottish",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "West Lothian"
+ },
+ "vctk/p265": {
+  "accent": "Scottish",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Ross"
+ },
+ "vctk/p266": {
+  "accent": "Irish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Athlone"
+ },
+ "vctk/p267": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Yorkshire"
+ },
+ "vctk/p269": {
+  "accent": "English",
+  "age": 20,
+  "gender": "Female",
+  "language": "English",
+  "region": "Newcastle"
+ },
+ "vctk/p270": {
+  "accent": "English",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Yorkshire"
+ },
+ "vctk/p271": {
+  "accent": "Scottish",
+  "age": 19,
+  "gender": "Male",
+  "language": "English",
+  "region": "Fife"
+ },
+ "vctk/p272": {
+  "accent": "Scottish",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Edinburgh"
+ },
+ "vctk/p273": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Suffolk"
+ },
+ "vctk/p274": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Essex"
+ },
+ "vctk/p275": {
+  "accent": "Scottish",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Midlothian"
+ },
+ "vctk/p276": {
+  "accent": "English",
+  "age": 24,
+  "gender": "Female",
+  "language": "English",
+  "region": "Oxford"
+ },
+ "vctk/p277": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "NE England"
+ },
+ "vctk/p278": {
+  "accent": "English",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Cheshire"
+ },
+ "vctk/p279": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Leicester"
+ },
+ "vctk/p280": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "English"
+ },
+ "vctk/p281": {
+  "accent": "Scottish",
+  "age": 29,
+  "gender": "Male",
+  "language": "English",
+  "region": "Edinburgh"
+ },
+ "vctk/p282": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Newcastle"
+ },
+ "vctk/p283": {
+  "accent": "Irish",
+  "age": 24,
+  "gender": "Female",
+  "language": "English",
+  "region": "Cork"
+ },
+ "vctk/p284": {
+  "accent": "Scottish",
+  "age": 20,
+  "gender": "Male",
+  "language": "English",
+  "region": "Fife"
+ },
+ "vctk/p285": {
+  "accent": "Scottish",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Edinburgh"
+ },
+ "vctk/p286": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Newcastle"
+ },
+ "vctk/p287": {
+  "accent": "English",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "York"
+ },
+ "vctk/p288": {
+  "accent": "Irish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Dublin"
+ },
+ "vctk/p292": {
+  "accent": "Northern Irish",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Belfast"
+ },
+ "vctk/p293": {
+  "accent": "Northern Irish",
+  "age": 22,
+  "gender": "Female",
+  "language": "English",
+  "region": "Belfast"
+ },
+ "vctk/p294": {
+  "accent": "American",
+  "age": 33,
+  "gender": "Female",
+  "language": "English",
+  "region": "San Francisco"
+ },
+ "vctk/p297": {
+  "accent": "American",
+  "age": 20,
+  "gender": "Female",
+  "language": "English",
+  "region": "New York"
+ },
+ "vctk/p298": {
+  "accent": "Irish",
+  "age": 19,
+  "gender": "Male",
+  "language": "English",
+  "region": "Tipperary"
+ },
+ "vctk/p299": {
+  "accent": "American",
+  "age": 25,
+  "gender": "Female",
+  "language": "English",
+  "region": "California"
+ },
+ "vctk/p300": {
+  "accent": "American",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "California"
+ },
+ "vctk/p301": {
+  "accent": "American",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "North Carolina"
+ },
+ "vctk/p302": {
+  "accent": "Canadian",
+  "age": 20,
+  "gender": "Male",
+  "language": "English",
+  "region": "Montreal"
+ },
+ "vctk/p303": {
+  "accent": "Canadian",
+  "age": 24,
+  "gender": "Female",
+  "language": "English",
+  "region": "Toronto"
+ },
+ "vctk/p304": {
+  "accent": "Northern Irish",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Belfast"
+ },
+ "vctk/p305": {
+  "accent": "American",
+  "age": 19,
+  "gender": "Female",
+  "language": "English",
+  "region": "Philadelphia"
+ },
+ "vctk/p306": {
+  "accent": "American",
+  "age": 21,
+  "gender": "Female",
+  "language": "English",
+  "region": "New York"
+ },
+ "vctk/p307": {
+  "accent": "Canadian",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Ontario"
+ },
+ "vctk/p308": {
+  "accent": "American",
+  "age": 18,
+  "gender": "Female",
+  "language": "English",
+  "region": "Alabama"
+ },
+ "vctk/p310": {
+  "accent": "American",
+  "age": 21,
+  "gender": "Female",
+  "language": "English",
+  "region": "Tennessee"
+ },
+ "vctk/p311": {
+  "accent": "American",
+  "age": 21,
+  "gender": "Male",
+  "language": "English",
+  "region": "Iowa"
+ },
+ "vctk/p312": {
+  "accent": "Canadian",
+  "age": 19,
+  "gender": "Female",
+  "language": "English",
+  "region": "Hamilton"
+ },
+ "vctk/p313": {
+  "accent": "Irish",
+  "age": 24,
+  "gender": "Female",
+  "language": "English",
+  "region": "County Down"
+ },
+ "vctk/p314": {
+  "accent": "South African",
+  "age": 26,
+  "gender": "Female",
+  "language": "English",
+  "region": "Cape Town"
+ },
+ "vctk/p315": {
+  "accent": "American",
+  "age": 18,
+  "gender": "Male",
+  "language": "English",
+  "region": "New England"
+ },
+ "vctk/p316": {
+  "accent": "Canadian",
+  "age": 20,
+  "gender": "Male",
+  "language": "English",
+  "region": "Alberta"
+ },
+ "vctk/p317": {
+  "accent": "Canadian",
+  "age": 23,
+  "gender": "Female",
+  "language": "English",
+  "region": "Hamilton"
+ },
+ "vctk/p318": {
+  "accent": "American",
+  "age": 32,
+  "gender": "Female",
+  "language": "English",
+  "region": "Napa"
+ },
+ "vctk/p323": {
+  "accent": "South African",
+  "age": 19,
+  "gender": "Female",
+  "language": "English",
+  "region": "Pretoria"
+ },
+ "vctk/p326": {
+  "accent": "Australian",
+  "age": 26,
+  "gender": "Male",
+  "language": "English",
+  "region": "Sydney"
+ },
+ "vctk/p329": {
+  "accent": "American",
+  "age": 23,
+  "gender": "Female",
+  "language": "English"
+ },
+ "vctk/p330": {
+  "accent": "American",
+  "age": 26,
+  "gender": "Female",
+  "language": "English"
+ },
+ "vctk/p333": {
+  "accent": "American",
+  "age": 19,
+  "gender": "Female",
+  "language": "English",
+  "region": "Indiana"
+ },
+ "vctk/p334": {
+  "accent": "American",
+  "age": 18,
+  "gender": "Male",
+  "language": "English",
+  "region": "Chicago"
+ },
+ "vctk/p335": {
+  "accent": "New Zealand",
+  "age": 25,
+  "gender": "Female",
+  "language": "English"
+ },
+ "vctk/p336": {
+  "accent": "South African",
+  "age": 18,
+  "gender": "Female",
+  "language": "English",
+  "region": "Johannesburg"
+ },
+ "vctk/p339": {
+  "accent": "American",
+  "age": 21,
+  "gender": "Female",
+  "language": "English",
+  "region": "Pennsylvania"
+ },
+ "vctk/p341": {
+  "accent": "American",
+  "age": 26,
+  "gender": "Female",
+  "language": "English",
+  "region": "Ohio"
+ },
+ "vctk/p343": {
+  "accent": "Canadian",
+  "age": 27,
+  "gender": "Female",
+  "language": "English",
+  "region": "Alberta"
+ },
+ "vctk/p345": {
+  "accent": "American",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Florida"
+ },
+ "vctk/p347": {
+  "accent": "South African",
+  "age": 26,
+  "gender": "Male",
+  "language": "English",
+  "region": "Johannesburg"
+ },
+ "vctk/p351": {
+  "accent": "Northern Irish",
+  "age": 21,
+  "gender": "Female",
+  "language": "English",
+  "region": "Derry"
+ },
+ "vctk/p360": {
+  "accent": "American",
+  "age": 19,
+  "gender": "Male",
+  "language": "English",
+  "region": "New Jersey"
+ },
+ "vctk/p361": {
+  "accent": "American",
+  "age": 19,
+  "gender": "Female",
+  "language": "English",
+  "region": "New Jersey"
+ },
+ "vctk/p363": {
+  "accent": "Canadian",
+  "age": 22,
+  "gender": "Male",
+  "language": "English",
+  "region": "Toronto"
+ },
+ "vctk/p364": {
+  "accent": "Irish",
+  "age": 23,
+  "gender": "Male",
+  "language": "English",
+  "region": "Donegal"
+ },
+ "vctk/p374": {
+  "accent": "Australian",
+  "age": 28,
+  "gender": "Male",
+  "language": "English"
+ },
+ "vctk/p376": {
+  "accent": "Indian",
+  "age": 22,
+  "gender": "Male",
+  "language": "English"
+ },
+ "vctk/s5_023": {
+  "estimated": true,
+  "gender": "Female",
+  "language": "English"
+ },
+ "voice-donations/0a67": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/1410": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/1dd0": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/2181": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/245e": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/29da": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/30c5": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/3973": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/4189": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/468c": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/4b13": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/4b70": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/5b55": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/6148": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/617b": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/7020": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/7909": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/7b2b": {},
+ "voice-donations/8935": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/8dc9": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/8f15": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/92f0": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/9a2e": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/9a66": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/AHmad": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/ASEN": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Aadi": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/AbD": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Abhinox": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Abo_Ayman": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Abob_Malay": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Adarsh_Bulla": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/AgentCobra": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Ajith": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Alejandro_espanol_latino": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Allen": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/AmitNag": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Andrea": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Andrea_(Spanish)": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Antoine_Vala": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Antoni": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Aon": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Arjun_Z": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Aryobe": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/BLUE": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Bijay": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Blake": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Bobby_McFern": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Breaking_1": {},
+ "voice-donations/BrokenHypocrite": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Butter": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/CPS_001": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Chujus": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Cicada": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/ClassicWizard": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Curlinvictus": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Darius": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Darya_khan": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Deepak": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Dhruv_Rao": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Dil": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Enrique": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Enrique_(Spanish)": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Erick": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Ernesto_Y": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Eshan": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Esteban_Aguirre_Arias": {},
+ "voice-donations/Ferdinand": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/FlorDaddy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Fred_Mara": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Giovanne": {},
+ "voice-donations/Glenn": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Goku": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Gonzalo": {},
+ "voice-donations/Gonzalo-1": {},
+ "voice-donations/Greggy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Haku": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Hannah": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Hardik_Clone": {},
+ "voice-donations/Hillbilly_Jim": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Hkl": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Hugo_the_frenchie": {},
+ "voice-donations/Ilyass_yea": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Imran_475": {},
+ "voice-donations/Imran_from_I_India": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Indian_guy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Ineedthisnow": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/JJis2123": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/JOSHE": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/James": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Jaspino": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Jaw": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Jay": {},
+ "voice-donations/Jeff_Andrew": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Jeffrey": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Jeremy_Q": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Jimmy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Joaopedrobil1": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/John_Triguero": {},
+ "voice-donations/Juanrestrepo177777": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Karti": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Kditz": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Koorosh": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/LC": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/L_Roy": {},
+ "voice-donations/Lake": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Lammy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Lara": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Latin_Accent": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Liquescent": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Louis": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Lucas": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/MJDePedro": {},
+ "voice-donations/Maisako": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Manahen": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Marshal_Indian": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Midlands_Bedfordshire_Dialect": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Moses": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/MrHat": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Mr_captain": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Muhtasim's_Voice": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Mystery_Sir": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Narrum": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Nick": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/P0LFR": {},
+ "voice-donations/Pai_ve": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Parthiban": {},
+ "voice-donations/Prakash369": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Puzzle": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Qasim_Wali_Khan": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/RAJ": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Rafaelpazv": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Rahul": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Raj25": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Ramu": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Ranjith": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Richard_cuban": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Rony": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Roscoe": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Rs": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Rup": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/SSA150803": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/SS_1684": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/STONE": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Samsewak": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Selfie": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Sheddy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Siddh_Indian": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Sir_TJ": {},
+ "voice-donations/Sirajo_x": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Sp46": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Sr_Erick": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Standollars": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/TESLLA": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Tahii": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/TheFin": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/The_Sustainabler": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/The_other_brother": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Titorium": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Tonmoy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Umair": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Vexat": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Victor_Garcia": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Vinith___English_India": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Vitch": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Vivaldi": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/W_A_H": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Wealthiest": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/WhisperInEar": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/Yesid": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Youfied": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/Yuush": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/a59a": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/a6f9": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/a96a": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/aepeak": {},
+ "voice-donations/albertoforofo007": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/amazon_box": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/awais_shah": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/bathri": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/bbe4": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/bc98": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/bevi": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/boom": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/c0a0": {},
+ "voice-donations/cybina": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/d4a9": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/dce6": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/dwp": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/e819": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/edd4": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/efeb": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/english_with_german_accent": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/erihppas": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/f179": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/f9cf": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/fa52": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/fc96": {},
+ "voice-donations/floyd2026": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/gmaskell92": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/gyroo": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/hielos_1": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/hielos_2": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/injul": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/kbrn1": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/oldNerd": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/oldNerd2": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/oldNerd3": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/ra_XOr": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/rewi": {},
+ "voice-donations/robert": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/rshah_1_0": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/sanjay": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/siddharth_khanna": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/solace": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/spanish-limaperu": {
+  "estimated": true,
+  "gender": "Female"
+ },
+ "voice-donations/stein": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/sujan_daikoawaj": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/surazy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/taiyo": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/temp-007": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/thepolishdane": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/utk": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/vinayak": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/virtu": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/willbas": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/yaemdluffy": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-donations/zerocool": {
+  "estimated": true,
+  "gender": "Male"
+ },
+ "voice-zero/bill_boerst": {
+  "gender": "Male",
+  "language": "English",
+  "style": "Audiobook"
+ },
+ "voice-zero/caro_davy": {
+  "gender": "Female",
+  "language": "English",
+  "style": "Audiobook"
+ },
+ "voice-zero/peter_yearsley": {
+  "gender": "Male",
+  "language": "English",
+  "style": "Audiobook"
+ },
+ "voice-zero/stuart_bell": {
+  "gender": "Male",
+  "language": "English",
+  "style": "Audiobook"
+ }
+}

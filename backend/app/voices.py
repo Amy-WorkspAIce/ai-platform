@@ -17,6 +17,8 @@ import io
 import wave
 from pathlib import Path
 
+from app import voice_meta
+
 PREFIX = "custom:"
 MIN_SECONDS = 3
 MAX_SECONDS = 60
@@ -55,7 +57,11 @@ def wav_seconds(data: bytes) -> float:
 
 def public(voice: dict) -> dict:
     """A stored voice as the API shows it."""
-    return voice | {"id": f"{PREFIX}{voice['id']}"}
+    out = voice | {"id": f"{PREFIX}{voice['id']}"}
+    repo, _, path = (voice.get("source") or "").partition(":")
+    if repo == voice_meta.REPO:  # installed from the voice library: keep its labels
+        out["meta"] = voice_meta.lookup(path)
+    return out
 
 
 def get(app, voice: str | None) -> dict | None:

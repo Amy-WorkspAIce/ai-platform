@@ -3,11 +3,24 @@ import type { Api, AppSettings, LibraryVoice, ModelVoices, VoiceDetail } from ".
 import { describeVoice, routeAudio, sampleText } from "../devices";
 import { Icon } from "../icons";
 import { CustomVoices, acceptsText } from "./CustomVoices";
+import { type Facet, type Sort, VoiceFilterBar, labelFacets, labelLine, useVoiceFilters } from "./VoiceFilters";
 
 const YOURS = "Your voices";
 const PAGE = 24;
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const LAST = "￿"; // sorts voices missing a label after the rest
+
+function labelSorts<T>(label: (item: T) => VoiceDetail): Sort<T>[] {
+  const name = (i: T) => label(i).name;
+  return [
+    { label: "Name", key: name },
+    { label: "Gender", key: (i) => `${label(i).gender ?? LAST} ${name(i)}` },
+    { label: "Language", key: (i) => `${label(i).language || LAST} ${name(i)}` },
+    { label: "Accent", key: (i) => `${label(i).accent ?? LAST} ${name(i)}` },
+    { label: "Age, youngest first", key: (i) => label(i).age ?? 999 },
+  ];
+}
 
 /**
  * Everything about voices: browse and preview any installed speech model's voices and pick the
@@ -59,7 +72,6 @@ function ModelVoicesCard({
   const [browsing, setBrowsing] = useState<string | null>(null);
   const model = browsing && speech.installed.some((m) => m.id === browsing) ? browsing : active;
   const [info, setInfo] = useState<ModelVoices | null>(null);
-  const [lang, setLang] = useState("");
   const [playing, setPlaying] = useState("");
   const [error, setError] = useState("");
 
@@ -80,13 +92,17 @@ function ModelVoicesCard({
   const inUse = model === active;
   const current = inUse ? (settings.voice ?? info?.voices[0] ?? "") : "";
   const label = (v: string): VoiceDetail =>
-    own.has(v) ? { name: own.get(v)!.name, language: YOURS, gender: "" } : (info?.details?.[v] ?? describeVoice(v));
-  const byLang = new Map<string, string[]>();
-  for (const v of [...(voices ?? []), ...own.keys()]) {
-    const l = label(v).language;
-    byLang.set(l, [...(byLang.get(l) ?? []), v]);
-  }
-  const shownLang = byLang.has(lang) ? lang : byLang.has(label(current).language) ? label(current).language : [...byLang.keys()][0];
+    own.has(v)
+      ? { ...own.get(v)!.meta, name: own.get(v)!.name, group: YOURS }
+      : (info?.details?.[v] ?? describeVoice(v));
+  const items = useMemo(() => [...(voices ?? []), ...own.keys()], [info]); // eslint-disable-line react-hooks/exhaustive-deps
+  const facets: Facet<string>[] = [
+    { key: "set", label: "Set", values: (v) => (label(v).group ? [label(v).group!] : []) },
+    ...labelFacets(label),
+  ];
+  const filters = useVoiceFilters(items, facets, labelSorts(label), (v) => `${label(v).name} ${v} ${label(v).region ?? ""}`, model);
+  const [shown, setShown] = useState(PAGE);
+  useEffect(() => setShown(PAGE), [filters.matching.length, model]);
   const modelName = (id: string | null) => speech.installed.find((m) => m.id === id)?.name ?? id ?? "";
 
   async function preview(voice: string) {
@@ -167,18 +183,11 @@ function ModelVoicesCard({
                   `${voices.length} voice${voices.length === 1 ? "" : "s"}, nothing extra to download. `}
                 {info && acceptsText(info)}
               </p>
-              {byLang.size > 1 && (
-                <div className="segmented wrap" role="radiogroup" aria-label="Language">
-                  {[...byLang.keys()].map((l) => (
-                    <button key={l} role="radio" aria-checked={shownLang === l} className={shownLang === l ? "active" : ""} onClick={() => setLang(l)}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {items.length > 8 && <VoiceFilterBar state={filters} total={items.length} label="these voices" />}
               <div className="voice-grid">
-                {(byLang.get(shownLang) ?? []).map((v) => {
+                {filters.matching.slice(0, shown).map((v) => {
                   const d = label(v);
+                  const sub = labelLine(d) || (own.has(v) ? (own.get(v)!.kind === "clone" ? "Sample" : "Described") : "");
                   return (
                     <div key={v} className={`voice ${v === current ? "selected" : ""}`}>
                       <button className="icon-button" title={`Hear ${d.name}`} disabled={!!playing} onClick={() => void preview(v)}>
@@ -186,10 +195,9 @@ function ModelVoicesCard({
                       </button>
                       <span>
                         <strong>{d.name}</strong>
-                        <span className="muted small">
-                          {" "}
-                          {d.gender || (own.has(v) ? (own.get(v)!.kind === "clone" ? "Sample" : "Described") : "")}
-                        </span>
+                        {(sub || d.region || d.language) && (
+                          <span className="muted small voice-sub">{[sub, d.region ?? (d.accent ? "" : d.language)].filter(Boolean).join(" · ")}</span>
+                        )}
                       </span>
                       {v === current ? (
                         <span className="tag tools">In use</span>
@@ -202,6 +210,12 @@ function ModelVoicesCard({
                   );
                 })}
               </div>
+              {items.length > 0 && filters.matching.length === 0 && <p className="muted small">No voices match.</p>}
+              {filters.matching.length > shown && (
+                <button className="secondary add-voice-button" onClick={() => setShown((n) => n + PAGE * 2)}>
+                  Show more ({filters.matching.length - shown} left)
+                </button>
+              )}
             </>
           )}
         </>
@@ -221,8 +235,6 @@ function ModelVoicesCard({
 
 function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void }) {
   const [voices, setVoices] = useState<LibraryVoice[] | null>(null);
-  const [collection, setCollection] = useState("");
-  const [query, setQuery] = useState("");
   const [shown, setShown] = useState(PAGE);
   const [playing, setPlaying] = useState("");
   const [busy, setBusy] = useState("");
@@ -237,11 +249,21 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
     return () => audio.current?.pause();
   }, [api]);
 
-  const collections = useMemo(() => [...new Set((voices ?? []).map((v) => v.collection))], [voices]);
-  const q = query.trim().toLowerCase();
-  const matching = (voices ?? []).filter(
-    (v) => (!collection || v.collection === collection) && (!q || `${v.name} ${v.collection} ${v.language}`.toLowerCase().includes(q)),
-  );
+  const all = voices ?? [];
+  const facets: Facet<LibraryVoice>[] = [
+    { key: "collection", label: "Collection", values: (v) => [v.collection] },
+    ...labelFacets((v: LibraryVoice) => v),
+    { key: "license", label: "License", values: (v) => [v.license] },
+    { key: "installed", label: "Installed", values: (v) => [v.installed ? "Installed" : "Not installed"] },
+  ];
+  const sorts: Sort<LibraryVoice>[] = [
+    ...labelSorts((v: LibraryVoice) => v),
+    { label: "Collection", key: (v) => `${v.collection} ${v.name}` },
+    { label: "Installed first", key: (v) => `${v.installed ? 0 : 1} ${v.name}` },
+  ];
+  const filters = useVoiceFilters(all, facets, sorts, (v) => `${v.name} ${v.collection} ${v.region ?? ""} ${v.accent ?? ""}`);
+  const matching = filters.matching;
+  useEffect(() => setShown(PAGE), [matching.length]);
 
   function play(v: LibraryVoice) {
     audio.current?.pause();
@@ -286,34 +308,7 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
         <p className="muted small">{error ? "" : "Loading the library…"}</p>
       ) : (
         <>
-          <div className="library-filters">
-            <div className="segmented wrap" role="radiogroup" aria-label="Collection">
-              {["", ...collections].map((c) => (
-                <button
-                  key={c || "all"}
-                  role="radio"
-                  aria-checked={collection === c}
-                  className={collection === c ? "active" : ""}
-                  onClick={() => {
-                    setCollection(c);
-                    setShown(PAGE);
-                  }}
-                >
-                  {c || "All"}
-                </button>
-              ))}
-            </div>
-            <input
-              type="search"
-              placeholder="Search voices"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setShown(PAGE);
-              }}
-              aria-label="Search voices"
-            />
-          </div>
+          <VoiceFilterBar state={filters} total={all.length} label="the library" />
           <div className="voice-grid">
             {matching.slice(0, shown).map((v) => (
               <div key={v.id} className={`voice ${v.installed ? "selected" : ""}`}>
@@ -322,7 +317,7 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
                 </button>
                 <span>
                   <strong>{v.name}</strong>
-                  <span className="muted small voice-sub">{collection ? v.license : `${v.collection} · ${v.license}`}</span>
+                  <span className="muted small voice-sub">{[labelLine(v), v.region, v.collection].filter(Boolean).join(" · ")}</span>
                 </span>
                 {v.installed ? (
                   <span className="tag tools">Installed</span>

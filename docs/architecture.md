@@ -220,6 +220,15 @@ repo, keeping the collections that may be used commercially (CC0 and CC BY 4.0).
 one downloads the clip and stores it as an ordinary clone voice, with its `source` and the
 `credit` its license asks for.
 
+**Voice labels** (`app/voice_meta.py`, data in `voice_meta.json`) say what's known about the
+voices in that repo: gender, age, accent and region for the VCTK speakers (from the corpus's
+speaker list), styles and genders for recordings whose speakers are known, and otherwise a
+gender estimated from the sample's pitch (`"estimated": true`; checked against VCTK, 104 of 105
+right, with voices between 145 and 165 Hz left out). `scripts/voice_meta.py` regenerates it.
+Library entries, Kyutai's built-in voices, the starter voices and custom voices installed from
+the library all carry these labels; the Voices page turns them into filters, and whatever a
+voice lacks shows as "Uncategorized".
+
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB
 video text encoder) are streamed from RAM layer by layer (diffusers group offloading); or

@@ -50,7 +50,8 @@ call, and it can act on those apps through their APIs.
   Amy speaks with; add **your own voices** (record or upload a short sample to copy a voice, or
   describe one in words: "a calm older man with a deep voice"); and install ready-made ones
   from the **voice library** (hundreds of free-to-use samples). Every model that can copy or
-  design voices picks them up.
+  design voices picks them up. Search, sort and filter voices by language, gender, age, accent,
+  region, style and collection; voices nothing is known about show as "Uncategorized".
 - **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …"), even
   when you share them a few messages before asking it to remember, and brings the relevant
   ones into new conversations. It works with reasoning models too. The Memory page lets you search, edit,
@@ -145,7 +146,7 @@ print(reply.choices[0].message.content)
 - [x] Image generation (diffusers) and audio (faster-whisper, Kokoro) engines, installed on demand
 - [x] Speech runtimes: Chatterbox, XTTS, F5-TTS, Qwen3-TTS, MMS and Bark, each in its own venv; gated GGUF models imported into Ollama with your Hugging Face token
 - [x] Custom voices (recorded samples and described voices); Qwen3-TTS VoiceDesign and Base, OmniVoice, VoxCPM2
-- [x] Voices page and voice library; 13 more speech engines (Supertonic, KittenTTS, Kyutai, Pocket TTS, Parler-TTS, MeloTTS, Sopro, Soprano, Zonos, NeuTTS, OuteTTS, IndexTTS 2, VibeVoice Realtime, VieNeu); built-in HTTPS
+- [x] Voices page and voice library; 13 more speech engines (Supertonic, KittenTTS, Kyutai, Pocket TTS, Parler-TTS, MeloTTS, Sopro, Soprano, Zonos, NeuTTS, OuteTTS, IndexTTS 2, VibeVoice Realtime, VieNeu); built-in HTTPS; voice filters
 - [x] Web access (search + page reading) and agent mode with approvals
 - [x] Open catalog (Ollama library + Hugging Face), Perfect-match sorting, Settings page with Hugging Face token
 - [x] Video generation (Wan 2.1, LTX-Video, any diffusers video pipeline)

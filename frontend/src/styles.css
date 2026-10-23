@@ -554,3 +554,22 @@ details.rule summary { cursor: pointer; }
 .rule-form textarea { resize: vertical; min-height: 4.5rem; }
 .rule-form-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .rule-example { display: block; text-align: left; margin-top: 0.2rem; }
+
+/* Voice filters: search and sort, then each facet's values with how many voices they leave. */
+.voice-filters { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.voice-sort { display: inline-flex; align-items: center; gap: 0.4rem; }
+.facets { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.45rem 0.6rem; }
+.facets summary { cursor: pointer; font-weight: 600; }
+.facets[open] summary { margin-bottom: 0.4rem; }
+.facet { display: grid; grid-template-columns: 7.5rem 1fr; gap: 0.5rem; align-items: start; padding: 0.3rem 0; border-top: 1px solid var(--border); }
+.facet-label { color: var(--muted); padding-top: 0.3rem; }
+.facet-values { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.facet-values .chip { padding: 0.2rem 0.6rem; font-size: 0.82rem; }
+.facet-values .chip .count { color: var(--muted); margin-left: 0.2rem; font-variant-numeric: tabular-nums; }
+.facet-values .chip.active .count { color: inherit; }
+.facet-values .chip.uncategorized { font-style: italic; }
+.facet-values .chip:disabled { opacity: 0.45; }
+@media (max-width: 600px) {
+  .facet { grid-template-columns: 1fr; gap: 0.25rem; }
+  .facet-label { padding-top: 0; }
+}

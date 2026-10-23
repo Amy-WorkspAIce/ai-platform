@@ -77,17 +77,44 @@ def test_install_a_library_voice(client, fake_library):  # noqa: F811
     assert client.get(f"/api/voices/{voice['id']}/sample", headers=AUTH).status_code == 200
 
 
-def test_voice_details_pass_through(client):  # noqa: F811
+def test_voice_details_get_labels(client):  # noqa: F811
     variant = {
-        "tag": "Supertone/supertonic-3",
-        "size_gb": 0.4,
-        "engine_config": {"task": "speech", "runtime": "tts-supertonic", "backend": "supertonic"},
+        "tag": "kyutai/tts-1.6b-en_fr",
+        "size_gb": 2,
+        "engine_config": {"task": "speech", "runtime": "tts-kyutai", "backend": "kyutai"},
     }
     install(client.app, "audio", variant["tag"], variant)
-    details = {"F1": {"name": "Female 1", "language": "Voices", "gender": "Female"}}
-    answer_voices(client, {"voices": ["F1"], "details": details, "accepts": []})
-    r = client.get("/api/audio/voices?model=audio/Supertone/supertonic-3", headers=AUTH)
-    assert r.json()["details"] == details
+    details = {
+        "F1": {"name": "Female 1", "language": "Voices", "gender": "Female"},
+        "vctk/p225_023.wav": {"name": "Speaker 225", "language": "VCTK (English accents)"},
+        "Caro": {"name": "Caro", "language": "Starter voices", "gender": "Female"},
+    }
+    voices = [*details, "plain"]
+    answer_voices(client, {"voices": voices, "details": details, "accepts": []})
+    r = client.get("/api/audio/voices?model=audio/kyutai/tts-1.6b-en_fr", headers=AUTH)
+    got = r.json()["details"]
+    # A set's name moves out of "language"; labels the voice repo has are added.
+    assert got["F1"] == {"name": "Female 1", "gender": "Female", "group": "Voices"}
+    assert got["vctk/p225_023.wav"] == {
+        "name": "Speaker 225",
+        "group": "VCTK (English accents)",
+        "gender": "Female",
+        "age": 23,
+        "accent": "English",
+        "region": "Southern England",
+        "language": "English",
+    }
+    assert got["Caro"]["style"] == "Audiobook" and "estimated" not in got["Caro"]
+    assert "plain" not in got
+
+
+def test_library_voices_carry_labels(client, fake_library):  # noqa: F811
+    voices = {v["id"]: v for v in client.get("/api/voices/library", headers=AUTH).json()["voices"]}
+    assert voices["vctk/p225_023_enhanced.wav"]["accent"] == "English"
+    donor = voices["voice-donations/0a67.wav"]
+    assert donor["language"] == "" and donor["estimated"] is True and donor["gender"]
+    r = client.post("/api/voices/library", headers=AUTH, json={"id": "voice-zero/caro_davy.wav"})
+    assert r.json()["meta"]["gender"] == "Female"  # kept once installed
 
 
 def test_starter_voices_only_when_downloaded(monkeypatch):

@@ -676,21 +676,34 @@ export type CustomVoice = {
   /** Installed from the voice library: where from, and the credit its license asks for. */
   source?: string | null;
   credit?: string | null;
+  /** What the voice library knows about it (installed from the library only). */
+  meta?: VoiceLabels;
 };
 
 /** A ready-made voice sample from the voice library. */
-export type LibraryVoice = {
+/** What's known about a voice; anything missing shows as "Uncategorized". */
+export type VoiceLabels = {
+  gender?: string;
+  estimated?: boolean; // gender worked out from the sample's pitch
+  age?: number;
+  accent?: string;
+  region?: string;
+  language?: string;
+  style?: string;
+};
+
+export type LibraryVoice = VoiceLabels & {
   id: string;
   name: string;
   collection: string;
-  language: string;
   license: string;
   credit: string;
   preview: string;
   installed: string | null; // the custom voice id, once installed
 };
 
-export type VoiceDetail = { name: string; language: string; gender: string };
+/** A built-in voice's name and labels; ``group`` is the set it belongs to, if the model has sets. */
+export type VoiceDetail = VoiceLabels & { name: string; group?: string };
 
 /** A speech model's voices: built-in ones, and the user's voices it can speak in. */
 export type ModelVoices = {
