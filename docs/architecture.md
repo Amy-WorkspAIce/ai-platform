@@ -232,7 +232,10 @@ voice lacks shows as "Uncategorized".
 `app/voice_runners.py` says which installed speech models can speak each library voice: any
 model that copies voices (those needing a transcript only when the voice has one, or a
 speech-to-text model could write it down), and Kyutai TTS 1.6B for the VCTK and Alba voices it
-has built in. When a voice has none, the library suggests catalog models that would.
+has built in. Your own voices get the same treatment (`/api/voices/runners`): recorded ones work
+with models that copy voices, described ones with models that make voices from a description,
+and one installed from a VCTK or Alba recording also with Kyutai 1.6B's built-in copy. When a
+voice has none, the page suggests catalog models that would.
 
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB

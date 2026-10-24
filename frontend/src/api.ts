@@ -229,6 +229,13 @@ export class Api {
     this.request<void>(`/api/voices/${encodeURIComponent(id)}`, { method: "DELETE" });
   voiceLibrary = () =>
     this.request<{ voices: LibraryVoice[]; models: VoiceRunner[]; suggested: SuggestedRunner[] }>("/api/voices/library");
+  /** Where each of your voices can be used, and models to install for those that can't. */
+  voiceRunners = () =>
+    this.request<{
+      models: VoiceRunner[];
+      voices: Record<string, { model: string; voice: string }[]>;
+      suggested: Partial<Record<"clone" | "design", SuggestedRunner[]>>;
+    }>("/api/voices/runners");
   installLibraryVoice = (id: string) =>
     this.request<CustomVoice>("/api/voices/library", { method: "POST", body: JSON.stringify({ id }) });
   async voiceSampleUrl(id: string): Promise<string> {
@@ -706,7 +713,14 @@ export type LibraryVoice = VoiceLabels & {
 
 /** An installed speech model that can speak library voices: built in (Kyutai 1.6B, some of
  * them) or by copying the sample (some only once it has a transcript). */
-export type VoiceRunner = { id: string; name: string; how: "built_in" | "copies" | "copies_with_text" };
+export type VoiceRunner = {
+  id: string;
+  name: string;
+  how: "built_in" | "copies" | "copies_with_text" | "describes";
+  kinds: ("clone" | "design")[];
+  needs_text: boolean; // copies only samples whose words are written down
+  built_in: boolean; // Kyutai 1.6B: has some library voices built in
+};
 
 /** A speech model to install so library voices have something to run on. */
 export type SuggestedRunner = { tag: string; name: string; fit: Fit | null; size_gb: number | null; note: string };

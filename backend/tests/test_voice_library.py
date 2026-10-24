@@ -228,4 +228,52 @@ def test_library_says_which_models_speak_each_voice(client, fake_library, monkey
         {"tag": "x/gated", "name": "g", "runtime": "tts-xtts", "requires_token": True},
         {"tag": "kyutai/tts-1.6b-en_fr", "name": "tts-1.6b", "runtime": "tts-kyutai"},
     ]
-    assert [s["name"] for s in voice_runners.suggested(rows)] == ["chatterbox", "tts-1.6b"]
+    assert [s["name"] for s in voice_runners.suggested(rows, library=True)] == [
+        "chatterbox",
+        "tts-1.6b",
+    ]
+    assert [s["name"] for s in voice_runners.suggested(rows)] == ["chatterbox"]
+
+
+def test_your_voices_say_where_they_can_be_used(client, fake_library, monkeypatch):  # noqa: F811
+    from app.api import media
+
+    async def rows(request):
+        return [
+            {"tag": "ResembleAI/chatterbox", "name": "chatterbox", "runtime": "tts-chatterbox"},
+            {"tag": "x/parler", "name": "parler", "runtime": "tts-parler"},
+        ]
+
+    monkeypatch.setattr(media, "_speech_rows", rows)
+    vctk = client.post(
+        "/api/voices/library", headers=AUTH, json={"id": "vctk/p225_023_enhanced.wav"}
+    ).json()
+    caro = client.post(
+        "/api/voices/library", headers=AUTH, json={"id": "voice-zero/caro_davy.wav"}
+    ).json()
+    form = {"name": "Calm", "kind": "design", "description": "A calm older man"}
+    calm = client.post("/api/voices", headers=AUTH, data=form).json()
+
+    got = client.get("/api/voices/runners", headers=AUTH).json()
+    assert got["voices"] == {vctk["id"]: [], caro["id"]: [], calm["id"]: []}
+    assert [s["name"] for s in got["suggested"]["clone"]] == ["chatterbox"]
+    assert [s["name"] for s in got["suggested"]["design"]] == ["parler"]
+
+    for repo, runtime in (
+        ("kyutai/tts-1.6b-en_fr", "tts-kyutai"),
+        ("Qwen/Qwen3-TTS-12Hz-0.6B-Base", "tts-qwen"),
+        ("SWivid/F5-TTS", "tts-f5"),  # no transcripts here, so no use for these clones
+    ):
+        cfg = {"task": "speech", "runtime": runtime, "backend": runtime.removeprefix("tts-")}
+        install(client.app, "audio", repo, {"tag": repo, "size_gb": 1, "engine_config": cfg})
+    got = client.get("/api/voices/runners", headers=AUTH).json()
+    qwen = "audio/Qwen/Qwen3-TTS-12Hz-0.6B-Base"
+    kyutai = "audio/kyutai/tts-1.6b-en_fr"
+    # Kyutai 1.6B speaks the VCTK speaker with its own built-in copy.
+    assert sorted(got["voices"][vctk["id"]], key=lambda w: w["model"]) == [
+        {"model": qwen, "voice": vctk["id"]},
+        {"model": kyutai, "voice": "vctk/p225_023.wav"},
+    ]
+    assert got["voices"][caro["id"]] == [{"model": qwen, "voice": caro["id"]}]
+    assert got["voices"][calm["id"]] == []
+    assert list(got["suggested"]) == ["design"]

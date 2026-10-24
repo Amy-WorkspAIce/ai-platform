@@ -1,13 +1,17 @@
-"""Which speech models can speak a voice library voice.
+"""Which installed speech models can speak a voice: one of your voices, or a voice library voice.
 
-Library voices are samples, so any model that copies a voice from a sample can speak them
-once they're installed (models that need the sample's words written down only when it has a
-transcript). Kyutai TTS 1.6B also has the VCTK and Alba MacKenna voices built in.
+- A recorded voice (a clone) works with models that copy voices from a sample; some of them
+  also need the sample's words written down (``NEEDS_TEXT``).
+- A described voice works with models that make a voice from a description.
+- Kyutai TTS 1.6B can't copy voices, but has the library's VCTK and Alba MacKenna voices built
+  in, so those (and your voices installed from them) can use its built-in copy.
+
+When nothing installed can, ``suggested`` picks catalog models that could.
 """
 
 from app import delegation
 from app.catalog import speech
-from app.voice_meta import key
+from app.voice_meta import REPO, key
 
 # Runtimes whose voice copying needs the sample's transcript.
 NEEDS_TEXT = {"tts-f5", "tts-omnivoice", "tts-neutts", "tts-kitten", "tts-transformers"}
@@ -15,23 +19,33 @@ KYUTAI_BUILT_IN = ("vctk/", "alba-mackenna/")
 MAX_SUGGESTED = 5
 
 
-def copies(runtime: str | None, repo: str) -> bool:
+def kinds(runtime: str | None, repo: str) -> list[str]:
+    """The kinds of custom voice a model can use: "clone" and/or "design"."""
     style = speech.style_for(runtime, repo, []) or ""
-    return "cop" in style  # "copied from your sample", "can copy a voice", "describe or copy"
+    out = []
+    if "cop" in style:  # "copied from your sample", "can copy a voice", "describe or copy"
+        out.append("clone")
+    if "describe" in style:
+        out.append("design")
+    return out
 
 
 def kyutai_voices(runtime: str | None, repo: str) -> bool:
     """Kyutai TTS 1.6B (not the 0.75B, which copies voices) has some library voices built in."""
-    return runtime == "tts-kyutai" and not copies(runtime, repo)
+    return runtime == "tts-kyutai" and not kinds(runtime, repo)
 
 
-def built_into_kyutai(voice_id: str) -> bool:
-    return key(voice_id).startswith(KYUTAI_BUILT_IN)
+def kyutai_voice(library_path: str) -> str | None:
+    """Kyutai TTS 1.6B's own id for a library voice it has built in (None if it hasn't)."""
+    if not key(library_path).startswith(KYUTAI_BUILT_IN):
+        return None
+    return library_path.replace("_enhanced.wav", ".wav")  # it has the original recordings
 
 
 def installed(app) -> list[dict]:
-    """Installed speech models that can speak library voices: [{id, name, how}], where ``how``
-    is "built_in" (Kyutai 1.6B, some voices), "copies", or "copies_with_text"."""
+    """Installed speech models that can speak voices beyond their own:
+    [{id, name, kinds, needs_text, built_in, how}]. ``built_in``: Kyutai 1.6B's library voices;
+    ``how`` (for the voice library): "built_in", "copies" or "copies_with_text"."""
     variants = {
         f"{engine}/{tag}": variant for engine, tag, variant in app.state.engines.installed_models()
     }
@@ -40,13 +54,27 @@ def installed(app) -> list[dict]:
         variant = variants.get(m["id"]) or {}
         runtime = (variant.get("engine_config") or {}).get("runtime")
         repo = variant.get("tag", "")
-        if kyutai_voices(runtime, repo):
-            how = "built_in"
-        elif copies(runtime, repo):
-            how = "copies_with_text" if runtime in NEEDS_TEXT else "copies"
-        else:
+        can = kinds(runtime, repo)
+        built_in = kyutai_voices(runtime, repo)
+        if not can and not built_in:
             continue
-        out.append({"id": m["id"], "name": m["name"], "how": how})
+        needs_text = "clone" in can and runtime in NEEDS_TEXT
+        if built_in:
+            how = "built_in"
+        elif "clone" in can:
+            how = "copies_with_text" if needs_text else "copies"
+        else:
+            how = "describes"
+        out.append(
+            {
+                "id": m["id"],
+                "name": m["name"],
+                "kinds": can,
+                "needs_text": needs_text,
+                "built_in": built_in,
+                "how": how,
+            }
+        )
     return out
 
 
@@ -56,29 +84,50 @@ def runs_on(voice_id: str, models: list[dict], transcript: bool) -> list[str]:
     model is there to transcribe it)."""
     out = []
     for m in models:
-        if m["how"] == "built_in":
-            ok = built_into_kyutai(voice_id)
+        if m["built_in"]:
+            ok = kyutai_voice(voice_id) is not None
         else:
-            ok = m["how"] == "copies" or transcript
+            ok = "clone" in m["kinds"] and (transcript or not m["needs_text"])
         if ok:
             out.append(m["id"])
     return out
 
 
-def suggested(rows: list[dict]) -> list[dict]:
-    """Speech models to install so library voices have something to run on, best first:
-    catalog rows (already sorted) that copy voices, plus Kyutai TTS 1.6B for its built-in ones."""
+def usable_with(voice: dict, models: list[dict]) -> list[dict]:
+    """Where one of your voices can be used: [{model, voice}], ``voice`` being the id to speak
+    with on that model (your voice, or Kyutai 1.6B's built-in copy of a library voice)."""
+    out = []
+    repo, _, path = (voice.get("source") or "").partition(":")
+    for m in models:
+        if m["built_in"]:
+            builtin = kyutai_voice(path) if repo == REPO and voice["kind"] == "clone" else None
+            if builtin:
+                out.append({"model": m["id"], "voice": builtin})
+        elif voice["kind"] in m["kinds"]:
+            if voice["kind"] == "clone" and m["needs_text"] and not voice.get("transcript"):
+                continue
+            out.append({"model": m["id"], "voice": f"custom:{voice['id']}"})
+    return out
+
+
+def suggested(rows: list[dict], kind: str = "clone", library: bool = False) -> list[dict]:
+    """Speech models to install for voices of one kind, best first, from catalog rows (already
+    sorted). ``library``: also offer Kyutai TTS 1.6B for its built-in library voices."""
     out = []
     for r in rows:
         if r.get("unsupported") or r.get("requires_token") or r.get("installed"):
             continue
         runtime, repo = r.get("runtime"), r.get("tag", "")
-        if kyutai_voices(runtime, repo):
+        can = kinds(runtime, repo)
+        if library and kyutai_voices(runtime, repo):
             note = "has the VCTK and Alba MacKenna voices built in"
-        elif copies(runtime, repo):
-            note = "copies any of them"
-            if runtime in NEEDS_TEXT:
-                note += " (with a speech-to-text model installed)"
+        elif kind in can:
+            if kind == "design":
+                note = "makes voices from a description"
+            else:
+                note = "copies voices from a sample"
+                if runtime in NEEDS_TEXT:
+                    note += " (needs the sample's words written down)"
         else:
             continue
         out.append(

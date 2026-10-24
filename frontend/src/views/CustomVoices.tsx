@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { Api, CustomVoice, ModelChoice, ModelVoices } from "../api";
 import { describeVoice, routeAudio, toWav } from "../devices";
 import { Icon } from "../icons";
@@ -49,26 +49,36 @@ export function acceptsText(info: ModelVoices): string {
 export function CustomVoices({
   api,
   speech,
-  usable,
   version = 0,
   onChanged,
+  active,
+  current,
+  onUse,
+  onBrowseModels,
 }: {
   api: Api;
   speech: ModelChoice;
-  /** Ids of the voices the current model can use, or null if unknown. */
-  usable: Set<string> | null;
   /** Bump to reload the list (a voice was added elsewhere, e.g. from the voice library). */
   version?: number;
   onChanged: () => void;
+  /** The speech model in use and the voice it speaks with. */
+  active: string | null;
+  current: string | null;
+  /** Speak with ``voice`` on ``model`` (switching models if needed). */
+  onUse: (model: string, voice: string) => void;
+  onBrowseModels: () => void;
 }) {
   const [voices, setVoices] = useState<CustomVoice[] | null>(null);
+  const [runners, setRunners] = useState<Runners | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
 
   const load = () =>
-    api
-      .customVoices()
-      .then(setVoices)
+    Promise.all([api.customVoices(), api.voiceRunners().catch(() => null)])
+      .then(([list, where]) => {
+        setVoices(list);
+        setRunners(where);
+      })
       .catch((e) => setError(errorText(e)));
   useEffect(() => {
     void load();
@@ -90,7 +100,18 @@ export function CustomVoices({
       {voices && voices.length > 0 && (
         <ul className="custom-voices">
           {voices.map((v) => (
-            <VoiceRow key={v.id} api={api} voice={v} usable={usable} onChanged={changed} onError={setError} />
+            <VoiceRow key={v.id} api={api} voice={v} onChanged={changed} onError={setError}>
+              {runners && (
+                <VoiceUses
+                  voice={v}
+                  runners={runners}
+                  active={active}
+                  current={current}
+                  onUse={onUse}
+                  onBrowseModels={onBrowseModels}
+                />
+              )}
+            </VoiceRow>
           ))}
         </ul>
       )}
@@ -113,18 +134,96 @@ export function CustomVoices({
   );
 }
 
+type Runners = Awaited<ReturnType<Api["voiceRunners"]>>;
+
+/**
+ * Where one of your voices works: "Use with" each installed model that can speak it, or, when
+ * none can, the models to install.
+ */
+function VoiceUses({
+  voice,
+  runners,
+  active,
+  current,
+  onUse,
+  onBrowseModels,
+}: {
+  voice: CustomVoice;
+  runners: Runners;
+  active: string | null;
+  current: string | null;
+  onUse: (model: string, voice: string) => void;
+  onBrowseModels: () => void;
+}) {
+  const where = runners.voices[voice.id] ?? [];
+  const name = (id: string) => runners.models.find((m) => m.id === id)?.name ?? id;
+  // Models that would take it once its words are written down.
+  const wantWords =
+    voice.kind === "clone" && !voice.transcript
+      ? runners.models.filter((m) => m.needs_text && !where.some((w) => w.model === m.id))
+      : [];
+  const suggested = runners.suggested[voice.kind] ?? [];
+
+  if (!where.length) {
+    return (
+      <div className="voice-uses none small">
+        <span>Not usable with your installed speech models.</span>
+        {wantWords.length > 0 && (
+          <span> Write down what the sample says (Edit) to use it with {wantWords.map((m) => m.name).join(", ")}.</span>
+        )}
+        {suggested.length > 0 && (
+          <span>
+            {" "}
+            {wantWords.length ? "Or install" : "Install"} one of:{" "}
+            {suggested.map((s, i) => (
+              <span key={s.tag}>
+                {i > 0 && ", "}
+                <strong title={s.note}>{s.name}</strong>
+              </span>
+            ))}
+            .{" "}
+            <button className="link small" onClick={onBrowseModels}>
+              Browse models
+            </button>
+          </span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="voice-uses small">
+      <span className="muted">Use with</span>
+      {where.map((w) =>
+        w.model === active && w.voice === current ? (
+          <span key={w.model} className="tag tools">
+            In use with {name(w.model)}
+          </span>
+        ) : (
+          <button key={w.model} className="chip small" onClick={() => onUse(w.model, w.voice)}>
+            {name(w.model)}
+            {w.voice !== voice.id ? " (built in)" : ""}
+          </button>
+        ),
+      )}
+      {wantWords.length > 0 && (
+        <span className="muted"> · write down what it says (Edit) to also use it with {wantWords.map((m) => m.name).join(", ")}</span>
+      )}
+    </div>
+  );
+}
+
 function VoiceRow({
   api,
   voice,
-  usable,
   onChanged,
   onError,
+  children,
 }: {
   api: Api;
   voice: CustomVoice;
-  usable: Set<string> | null;
   onChanged: () => void;
   onError: (e: string) => void;
+  children?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(voice.name);
@@ -187,7 +286,6 @@ function VoiceRow({
             · {voice.kind === "clone" ? `${voice.seconds ?? "?"} s sample` : "Described"}
           </span>
         </span>
-        {usable && !usable.has(voice.id) && <span className="tag">Not for this model</span>}
         <button className="link" onClick={() => setEditing(!editing)}>
           {editing ? "Cancel" : "Edit"}
         </button>
@@ -217,6 +315,7 @@ function VoiceRow({
         </p>
       )}
       {voice.credit && <p className="muted small custom-voice-words">From the voice library: {voice.credit}</p>}
+      {children}
     </li>
   );
 }

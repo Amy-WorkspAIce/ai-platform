@@ -129,11 +129,11 @@ function ModelVoicesCard({
     }
   }
 
-  async function choose(voice: string) {
+  async function choose(voice: string, on: string | null = model) {
     setError("");
     try {
       // A voice belongs to its model, so using another model's voice switches models too.
-      const models = inUse ? settings.models : await api.saveModelDefault("speech", model);
+      const models = on === active ? settings.models : await api.saveModelDefault("speech", on);
       const saved = await api.saveVoice(voice);
       onSettings({ ...settings, models, voice: saved.voice });
       setBrowsing(null);
@@ -226,9 +226,12 @@ function ModelVoicesCard({
       <CustomVoices
         api={api}
         speech={speech}
-        usable={info ? new Set(own.keys()) : null}
         version={version}
         onChanged={loadVoices}
+        active={active}
+        current={settings.voice ?? null}
+        onUse={(m, v) => void choose(v, m)}
+        onBrowseModels={onBrowseModels}
       />
     </section>
   );

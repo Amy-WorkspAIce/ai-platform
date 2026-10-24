@@ -413,7 +413,8 @@ async def voice_library(request: Request) -> dict:
     return {"voices": voices, "models": models, "suggested": suggested}
 
 
-async def _suggested_runners(request: Request) -> list[dict]:
+async def _speech_rows(request: Request) -> list[dict]:
+    """Catalog speech models, best for this machine first (with each one's runtime)."""
     try:
         families = await _annotated(request, await _standard_live(request.app.state.live_catalog))
     except httpx.HTTPError:
@@ -421,7 +422,29 @@ async def _suggested_runners(request: Request) -> list[dict]:
     runtime = {f["id"]: f.get("runtime") for f in families}
     rows = [r | {"runtime": runtime.get(r["family_id"])} for r in flatten(families)]
     rows = [r for r in rows if "speech" in r["use_cases"]]
-    return runners.suggested(sorted(rows, key=_row_sort_key("perfect")))
+    return sorted(rows, key=_row_sort_key("perfect"))
+
+
+async def _suggested_runners(request: Request) -> list[dict]:
+    return runners.suggested(await _speech_rows(request), "clone", library=True)
+
+
+@api.get("/voices/runners")
+async def voice_runners(request: Request) -> dict:
+    """Which installed speech models can use each of your voices (``voices``: id -> [{model,
+    voice}]), and for the kinds of voice nothing installed can use, models to install."""
+    models = runners.installed(request.app)
+    usable = {
+        custom.PREFIX + v["id"]: (v["kind"], runners.usable_with(v, models))
+        for v in request.app.state.db.list_voices()
+    }
+    stuck = {kind for kind, where in usable.values() if not where}
+    rows = await _speech_rows(request) if stuck else []
+    return {
+        "models": models,
+        "voices": {vid: where for vid, (_, where) in usable.items()},
+        "suggested": {kind: runners.suggested(rows, kind) for kind in sorted(stuck)},
+    }
 
 
 class LibraryVoice(BaseModel):
