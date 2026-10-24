@@ -134,7 +134,7 @@ def test_learns_facts_after_the_answer(client):
 
     # Next chat: the fact is recalled into the system prompt.
     llm2 = FakeLLM()
-    chat(client, llm2, "what should I run?")
+    chat(client, llm2, "what models can my RTX 2080 Ti run?")
     assert "Has an RTX 2080 Ti" in llm2.chat_requests[0]["messages"][0]["content"]
 
 
@@ -207,15 +207,16 @@ def test_memory_switches(client):
     client.app.state.db.add_memory("Prefers concise answers", "preferences")
     client.put("/api/memory/settings", headers=AUTH, json={"auto": False})
     llm = FakeLLM(extraction={"add": [{"text": "Likes tea"}], "update": [], "remove": []})
-    chat(client, llm, "I like tea")
+    chat(client, llm, "Keep your answers concise")
     assert llm.extract_requests == []  # not learning
     assert (
         "Prefers concise answers" in llm.chat_requests[0]["messages"][0]["content"]
     )  # still recalling
     client.put("/api/memory/settings", headers=AUTH, json={"enabled": False})
     llm = FakeLLM()
-    chat(client, llm, "hi")
+    chat(client, llm, "Keep your answers concise")
     assert "Prefers concise answers" not in llm.chat_requests[0]["messages"][0]["content"]
+    assert "recall_memory" not in json.dumps(llm.chat_requests[0].get("tools") or [])
 
 
 def test_memory_api(client):
@@ -237,14 +238,57 @@ def test_memory_api(client):
     assert client.delete("/api/memory?confirm=true", headers=AUTH).json() == {"deleted": 1}
 
 
-def test_recall_ranks_by_keywords_when_there_are_many_facts(client):
+def test_recall_gives_only_facts_that_relate_to_the_message(client):
     db = client.app.state.db
-    for i in range(memory.INCLUDE_ALL_BELOW + 5):
+    for i in range(20):
         db.add_memory(f"Filler fact number {i} about gardening", "general")
     db.add_memory("Owns an RTX 2080 Ti graphics card", "setup")
     facts = asyncio.run(memory.recall(client.app, "which graphics card do I have?"))
-    assert len(facts) == memory.RECALL_LIMIT
-    assert facts[0]["text"] == "Owns an RTX 2080 Ti graphics card"
+    assert [f["text"] for f in facts] == ["Owns an RTX 2080 Ti graphics card"]
+    assert asyncio.run(memory.recall(client.app, "Hello, how are you today?")) == []
+    everything = asyncio.run(memory.recall(client.app, "What do you remember about me?"))
+    assert len(everything) == 21
+
+
+def test_recall_by_meaning_takes_facts_that_stand_out(client, monkeypatch):
+    db = client.app.state.db
+    for text in ["Has a cat named Miso", "Lives in Seattle", "Is learning Japanese", "Likes tea",
+                 "Works nights", "Plays chess"]:  # fmt: skip
+        db.add_memory(text, "general")
+    near = {"Has a cat named Miso": 0.62}  # the rest sit around 0.45, like a greeting's matches
+
+    async def by_meaning(app, query, facts):
+        scored = [(near.get(f["text"], 0.45) if "pets" in query else 0.47, f) for f in facts]
+        return sorted(scored, key=lambda s: s[0], reverse=True)
+
+    monkeypatch.setattr(memory, "_by_meaning", by_meaning)
+    pets = asyncio.run(memory.recall(client.app, "what pets do I have?"))
+    assert [f["text"] for f in pets] == ["Has a cat named Miso"]
+    assert asyncio.run(memory.recall(client.app, "hi")) == []
+
+
+def test_small_talk_gets_no_memories_but_can_look_them_up(client):
+    db = client.app.state.db
+    db.add_memory("Has a cat named Miso", "people")
+    db.add_memory("Runs an Unraid server with a 6 GB GPU", "setup")
+    llm = FakeLLM()
+    conv = chat(client, llm, "Hello, how are you?")[0]["conversation_id"]
+    request = llm.chat_requests[0]
+    system = request["messages"][0]["content"]
+    assert "Miso" not in system and "Unraid" not in system
+    assert "You remember 2 facts" in system and "recall_memory" in system
+    [tool] = [t for t in request["tools"] if t["function"]["name"] == "recall_memory"]
+
+    # The model looks something up: it gets the closest facts, and the chat logs them.
+    toolset_tool = memory.recall_tool(
+        client.app,
+        lambda facts: [db.log_memory(conv, "recalled", f["text"], f["id"]) for f in facts],
+    )
+    found = asyncio.run(toolset_tool.run({"query": "what GPU is in the server"}))
+    assert found.startswith("- Runs an Unraid server")
+    assert "Miso" in asyncio.run(toolset_tool.run({"query": ""}))  # empty lists everything
+    logged = client.get(f"/api/conversations/{conv}/details", headers=AUTH).json()["memories"]
+    assert logged[0]["text"] == "Runs an Unraid server with a 6 GB GPU"
 
 
 def test_embedding_helpers():
@@ -307,8 +351,8 @@ def test_chat_details_show_what_memory_did_there(client):
     assert learned["exists"] and details["subagents"] == []
 
     # Another chat recalls the fact: listed once, however many times it's used.
-    second = chat(client, FakeLLM(), "what pets do I have?")[0]["conversation_id"]
-    chat(client, FakeLLM(), "and their names?", conversation_id=second)
+    second = chat(client, FakeLLM(), "how is my cat Miso doing?")[0]["conversation_id"]
+    chat(client, FakeLLM(), "is Miso eating well?", conversation_id=second)
     recalled = client.get(f"/api/conversations/{second}/details", headers=AUTH).json()["memories"]
     assert [(m["action"], m["text"]) for m in recalled] == [("recalled", "Has a cat named Miso")]
 

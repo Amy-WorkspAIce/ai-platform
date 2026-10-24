@@ -67,6 +67,7 @@ const SUMMARY_ARG: Record<string, string> = {
   generate_video: "prompt",
   speak: "text",
   ask_models: "question",
+  recall_memory: "query",
 };
 
 /** Tools whose result is media shown in the chat. */
@@ -86,6 +87,7 @@ const TOOL_LABEL: Record<string, string> = {
   generate_video: "Video",
   speak: "Voice",
   ask_models: "Asked other models",
+  recall_memory: "Looked in memory",
 };
 
 // Images the user attached are referenced in their message so the model can edit them.

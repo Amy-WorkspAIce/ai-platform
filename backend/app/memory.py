@@ -13,17 +13,28 @@ import json
 import logging
 import math
 import re
+import statistics
 from array import array
+from collections import Counter
 
 import httpx
 
 from app import catalog
 from app.providers import Provider
+from app.tools import Tool
 
 log = logging.getLogger(__name__)
 
-INCLUDE_ALL_BELOW = 40  # with this few facts, recall them all
-RECALL_LIMIT = 12
+# Facts given with each message: only ones that clearly relate to it. A fact relates when its
+# meaning stands out from the rest (similarity this far above the median; measured with
+# nomic-embed-text, where greetings stay under +0.08 and real matches score +0.11 to +0.21) or,
+# without an embedding model, when it shares a meaningful word with the message. Anything else
+# the model looks up with recall_memory when it needs it.
+RECALL_LIMIT = 8
+RELEVANT_MARGIN = 0.10
+MIN_FOR_MARGIN = 5  # fewer facts than this make a poor median: match on words instead
+LOOKUP_LIMIT = 10
+KNOWN_LIMIT = 60  # extraction sees every fact up to this many
 EARLIER_TURNS = 6  # the user's earlier messages in the chat shown to extraction
 CATEGORIES = ("personal", "preferences", "work", "projects", "people", "setup", "goals", "general")
 
@@ -63,8 +74,33 @@ Reply with only JSON in this shape (use empty lists when nothing changes):
   "update": [{{"id": "...", "text": "..."}}],
   "remove": ["id", ...]}}"""
 
-RECALL_HEADER = """What you know about the user from earlier conversations (use it naturally when \
-relevant; don't recite it; if the user corrects something, go with the correction):"""
+INDEX_PROMPT = """You remember {count} facts about the user from earlier chats ({topics}). \
+They aren't shown here. When knowing more about the user would change your answer (their \
+setup, projects, preferences, people in their life) or they ask what you remember, look it up \
+with recall_memory. Don't bring up what you remember when the conversation doesn't call for it, \
+and never list it unprompted: a greeting gets a normal greeting."""
+
+RECALL_HEADER = """Remembered facts that relate to this message (use them only where they help; \
+if the user corrects one, go with the correction):"""
+
+# Messages about the user as a whole ("what do you remember about me?", "based on what you
+# know about me").
+ABOUT_ME = re.compile(
+    r"\b(know|remember|recall)\w*\s+(about\s+)?(me|myself)\b"
+    r"|\babout me\b.*\?",
+    re.I,
+)
+
+# Words that say nothing about a topic, so they don't make a fact match.
+STOPWORDS = set(
+    "the and are you your yours for with this that these those was were have has had does did "
+    "doing done can could would should will shall may might must not but any all about what "
+    "when where which who whom whose why how hello hey hiya there here today tonight morning "
+    "evening afternoon thanks thank please okay yes yeah good great fine well just really very "
+    "much more most some get got make made know like want need tell give let its it's i'm "
+    "i've i'd i'll you're from into out over than then them they their our ours his her she him "
+    "also too again new now".split()
+)
 
 
 # ---------------------------------------------------------------- embeddings
@@ -130,33 +166,89 @@ async def embed(app, texts: list[str], model: str) -> list[list[float]] | None:
 
 
 def _words(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2}
+    return {w for w in re.findall(r"[a-z0-9']+", text.lower()) if len(w) > 2} - STOPWORDS
+
+
+def _by_words(query: str, facts: list[dict]) -> list[tuple[float, dict]]:
+    q = _words(query)
+    scored = [(len(q & _words(f["text"])) / (1 + len(_words(f["text"]))), f) for f in facts]
+    return sorted((s for s in scored if s[0] > 0), key=lambda s: s[0], reverse=True)
+
+
+async def _by_meaning(app, query: str, facts: list[dict]) -> list[tuple[float, dict]] | None:
+    """Facts by similarity to ``query``, most similar first; None without an embedding model."""
+    model = await embedding_model(app)
+    qvec = (await embed(app, [query], model) or [None])[0] if model else None
+    if not qvec:
+        return None
+    await ensure_embeddings(app, facts, model)
+    scored = [
+        (cosine(qvec, unpack(f["embedding"])), f)
+        for f in facts
+        if f.get("embedding") and f.get("embedding_model") == model
+    ]
+    return sorted(scored, key=lambda s: s[0], reverse=True)
 
 
 async def recall(app, query: str, limit: int = RECALL_LIMIT) -> list[dict]:
-    """The facts most relevant to ``query`` (all of them when there are few)."""
+    """The facts that clearly relate to ``query``; none for small talk."""
     db = app.state.db
     facts = db.list_memories()
     if not facts:
         return []
-    if len(facts) <= INCLUDE_ALL_BELOW:
-        chosen = facts
+    if ABOUT_ME.search(query):
+        # "What do you know about me?": everything, without relying on a tool call.
+        chosen = facts[:50]
+    elif scored := await _by_meaning(app, query, facts) if len(facts) >= MIN_FOR_MARGIN else None:
+        median = statistics.median(s for s, _ in scored)
+        chosen = [f for s, f in scored if s - median >= RELEVANT_MARGIN][:limit]
     else:
-        model = await embedding_model(app)
-        scored: list[tuple[float, dict]] = []
-        qvec = (await embed(app, [query], model) or [None])[0] if model else None
-        if qvec:
-            await ensure_embeddings(app, facts, model)
-            for f in facts:
-                if f.get("embedding") and f.get("embedding_model") == model:
-                    scored.append((cosine(qvec, unpack(f["embedding"])), f))
-        else:
-            q = _words(query)
-            scored = [(len(q & _words(f["text"])) / (1 + len(_words(f["text"]))), f) for f in facts]
-        scored.sort(key=lambda s: s[0], reverse=True)
-        chosen = [f for _, f in scored[:limit]]
+        chosen = [f for _, f in _by_words(query, facts)][:limit]
     db.touch_memories([f["id"] for f in chosen])
     return chosen
+
+
+async def look_up(app, query: str, limit: int = LOOKUP_LIMIT) -> list[dict]:
+    """recall_memory: the facts closest to ``query`` (everything, for an empty query)."""
+    facts = app.state.db.list_memories()
+    if not query.strip() or not facts:
+        return facts[:50]
+    scored = await _by_meaning(app, query, facts) or _by_words(query, facts)
+    chosen = [f for _, f in scored[:limit]]
+    app.state.db.touch_memories([f["id"] for f in chosen])
+    return chosen
+
+
+def index_prompt(facts: list[dict]) -> str | None:
+    """What kinds of things memory holds, so the model knows when to look."""
+    if not facts:
+        return None
+    topics = ", ".join(f"{c} {n}" for c, n in Counter(f["category"] for f in facts).most_common())
+    return INDEX_PROMPT.format(count=len(facts), topics=topics)
+
+
+def recall_tool(app, on_recall) -> Tool:
+    """Look up what's remembered about the user. ``on_recall(facts)`` logs what was found."""
+
+    async def run(args: dict) -> str:
+        found = await look_up(app, str(args.get("query") or ""))
+        on_recall(found)
+        if not found:
+            return "Nothing remembered about that."
+        return "\n".join(f"- {f['text']} ({f['category']})" for f in found)
+
+    return Tool(
+        "recall_memory",
+        "Look up what you remember about the user from earlier chats: their setup, projects, "
+        "preferences, people and pets, anything they asked you to remember. Describe what you "
+        "want to know (e.g. 'their GPU', 'pets'); leave it empty to list everything.",
+        {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "What to look up"}},
+        },
+        run,
+        summary_arg="query",
+    )
 
 
 async def ensure_embeddings(app, facts: list[dict], model: str) -> None:
@@ -235,7 +327,12 @@ async def extract(
     """Update memory from one exchange. Returns changes: [{"action", "text", "id"}] (no id
     when the update failed)."""
     db = app.state.db
-    known = await recall(app, user_message, limit=30)
+    # Every fact (or the closest when there are many), so it can update and skip duplicates.
+    facts = db.list_memories()
+    if len(facts) > KNOWN_LIMIT:
+        scored = await _by_meaning(app, user_message, facts) or _by_words(user_message, facts)
+        facts = [f for _, f in scored[:30]]
+    known = facts
     known_text = "\n".join(f"{f['id']}: {f['text']}" for f in known) or "(none yet)"
     exchange = f"User: {user_message[:4000]}\n\nAssistant: {assistant_reply[:2000]}"
     if earlier:

@@ -55,7 +55,7 @@ know) or tell the user what didn't work."""
 
 MEMORY_PROMPT = """You have long-term memory. After each reply, facts the user shares about \
 themselves (who they are, people and pets in their life, preferences, projects, anything they \
-ask you to remember) are saved automatically, and relevant ones are given to you in later \
+ask you to remember) are saved automatically, and you can look them up in later \
 chats. The user can see and edit them on the Memory page. So never say you can't remember \
 things between chats; when asked to remember something, say you'll remember it."""
 
@@ -230,15 +230,26 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         others = await rulesets.chat_model_ids(request.app)
         if len(others) > 1:
             toolset.add(rulesets.ask_models_tool(request.app, others, tracker))
-    recalled = await memory.recall(request.app, req.message) if us.memory_enabled else []
-    for fact in recalled:
-        db.log_memory(conv_id, "recalled", fact["text"], fact["id"], once=True)
+    # Memory: facts that clearly relate to the message, and a tool to look up the rest.
+    remembered = db.list_memories() if us.memory_enabled else []
+    recalled = await memory.recall(request.app, req.message) if remembered else []
+
+    def log_recalled(facts: list[dict]) -> None:
+        for fact in facts:
+            db.log_memory(conv_id, "recalled", fact["text"], fact["id"], once=True)
+
+    log_recalled(recalled)
+    if remembered:
+        toolset.add(memory.recall_tool(request.app, log_recalled))
+    memories = "\n\n".join(
+        p for p in (memory.index_prompt(remembered), memory.recall_prompt(recalled)) if p
+    )
     system = system_prompt(
         req,
         ws,
         web,
         creative_prompt(media_tools),
-        memory.recall_prompt(recalled),
+        memories or None,
         memory_on=us.memory_enabled and us.memory_auto,
         rules=rulesets.prompt(rules, project),
     )

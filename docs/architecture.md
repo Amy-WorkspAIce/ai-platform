@@ -139,10 +139,18 @@ thinking. When a coding model answered, a general model does the extraction (cod
 it, and a failed update shows as a `memory` event with `action: "failed"`.
 Anything that looks like a secret (keys, passwords, tokens, card numbers) is dropped.
 
-Recall: with 40 facts or fewer, all of them go into the system prompt. Beyond that, the most
-relevant 12 are chosen by cosine similarity of embeddings when an Ollama embedding model is
-installed (vectors stored as float32 blobs next to each fact, recomputed if the model changes),
-otherwise by keyword overlap. A vector database is unnecessary at personal scale: a few
+Recall: the system prompt says how many facts memory holds and on which topics, and gives the
+model a `recall_memory` tool to look them up (closest 10, or everything for an empty query).
+Only facts that clearly relate to the message go in up front (at most 8), so small talk gets
+none and the model doesn't recite what it knows. With an Ollama embedding model installed and
+at least 5 facts, a fact relates when its cosine similarity to the message is 0.10 above the
+median of all facts (measured with nomic-embed-text: greetings stay under +0.08, real matches
+score +0.11 to +0.21; absolute scores overlap too much to use). Otherwise it relates when it
+shares a meaningful word (stopwords removed). Messages about the user as a whole ("what do you
+remember about me") get every fact without waiting on a tool call. Extraction sees every fact
+(the closest 30 beyond 60) so it can update and skip duplicates. Vectors are stored as float32
+blobs next to each fact, recomputed if the model changes. A vector database is unnecessary at
+personal scale: a few
 thousand vectors compare in milliseconds in plain Python. `user_id` is already a column for
 when multiple users arrive.
 
