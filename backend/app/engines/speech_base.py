@@ -100,6 +100,16 @@ def device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def half():
+    """Half precision on a GPU (bfloat16 where the card supports it), full on CPU. Loading a
+    1-2B model in full precision needs 4-8 GB of VRAM and doesn't fit small cards."""
+    import torch
+
+    if not torch.cuda.is_available():
+        return torch.float32
+    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+
 def numpy(audio):
     import numpy as np
 

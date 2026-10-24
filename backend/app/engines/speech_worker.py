@@ -21,7 +21,7 @@ from pathlib import Path
 
 import _worker_common as common
 import speech_more
-from speech_base import DEFAULT, DESIGNS, Backend, starter  # noqa: F401 - re-exported
+from speech_base import DEFAULT, DESIGNS, Backend, half, starter  # noqa: F401 - re-exported
 from speech_base import device as _device
 from speech_base import numpy as _numpy
 
@@ -195,7 +195,9 @@ class Qwen(Backend):
         super().__init__(model_dir, config)
         from qwen_tts import Qwen3TTSModel
 
-        self.model = Qwen3TTSModel.from_pretrained(str(model_dir), device_map=_device())
+        self.model = Qwen3TTSModel.from_pretrained(
+            str(model_dir), device_map=_device(), dtype=half()
+        )
         self.kind = getattr(self.model.model, "tts_model_type", "custom_voice")
         self.accepts = {"voice_design": ("design",), "base": ("clone",)}.get(self.kind, ())
         self.starters = self.kind == "base"
