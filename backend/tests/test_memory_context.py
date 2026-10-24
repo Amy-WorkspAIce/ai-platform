@@ -126,7 +126,7 @@ def test_learns_facts_after_the_answer(client):
     types = [e["type"] for e in events]
     assert types.index("answer_done") < types.index("memory") < types.index("done")
     note = next(e for e in events if e["type"] == "memory")
-    assert note == {"type": "memory", "action": "remembered", "text": "Has an RTX 2080 Ti"}
+    assert note["action"] == "remembered" and note["text"] == "Has an RTX 2080 Ti" and note["id"]
     facts = client.get("/api/memory", headers=AUTH).json()["facts"]
     assert facts[0]["text"] == "Has an RTX 2080 Ti" and facts[0]["category"] == "setup"
     assert facts[0]["source_conversation_id"] == events[0]["conversation_id"]
@@ -294,3 +294,26 @@ def test_long_chat_is_condensed_into_a_summary(client):
         m["role"] == "system" and "Summary of the earlier part" in m["content"] for m in last
     )
     assert context.message_tokens(last) < 4096
+
+
+def test_chat_details_show_what_memory_did_there(client):
+    llm = FakeLLM(
+        extraction={"add": [{"text": "Has a cat named Miso"}], "update": [], "remove": []}
+    )
+    first = chat(client, llm, "My cat Miso says hi")[0]["conversation_id"]
+    details = client.get(f"/api/conversations/{first}/details", headers=AUTH).json()
+    [learned] = details["memories"]
+    assert learned["action"] == "remembered" and learned["text"] == "Has a cat named Miso"
+    assert learned["exists"] and details["subagents"] == []
+
+    # Another chat recalls the fact: listed once, however many times it's used.
+    second = chat(client, FakeLLM(), "what pets do I have?")[0]["conversation_id"]
+    chat(client, FakeLLM(), "and their names?", conversation_id=second)
+    recalled = client.get(f"/api/conversations/{second}/details", headers=AUTH).json()["memories"]
+    assert [(m["action"], m["text"]) for m in recalled] == [("recalled", "Has a cat named Miso")]
+
+    # Forgotten facts stay in the log, marked as gone.
+    client.delete(f"/api/memory/{learned['memory_id']}", headers=AUTH)
+    after = client.get(f"/api/conversations/{first}/details", headers=AUTH).json()["memories"]
+    assert after[0]["exists"] is False and after[0]["text"] == "Has a cat named Miso"
+    assert client.get("/api/conversations/nope/details", headers=AUTH).status_code == 404

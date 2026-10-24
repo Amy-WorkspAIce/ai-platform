@@ -106,6 +106,24 @@ for other models' views, the `ask_models` tool is offered: one question to up to
 models at once, answers returned side by side. It isn't offered otherwise, because small models
 reach for it on every message. Deleting a folder or workspace deletes its rules.
 
+## Chat details panel
+
+Each chat has a Details panel, hidden by default, for what Amy did behind the scenes:
+
+- **Memory**: the `memory_log` table records each fact remembered, updated or removed in the
+  chat (and failed updates), plus facts recalled into it from earlier chats (once per fact).
+  Rows join `memories` for the fact's current text and whether it still exists.
+- **Thought process**: built in the browser from the chat's messages (`reasoning`, inline
+  `<think>` blocks, tool calls), grouped by user message. Replies only link to it.
+- **Sub-agents**: `app/subagents.py`. A `Tracker` logs each model the chat hands work to (the
+  `subagents` table) and streams a `subagent` event when it starts and finishes:
+  `ask_models` logs each model it consults, and `track_media` wraps the creative tools to log
+  the image, video or voice model doing the work. Rows still `running` at startup are marked
+  `stopped`.
+
+`GET /api/conversations/{id}/details` returns the memory log and sub-agents; both tables
+cascade when the chat is deleted.
+
 ## Memory
 
 Facts about the user live in the `memories` table in the same SQLite database (one short

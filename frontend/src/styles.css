@@ -124,9 +124,6 @@ button.danger { color: var(--error); }
 .markdown pre code { background: none; padding: 0; }
 .markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
 .markdown th, .markdown td { border: 1px solid var(--border); padding: 0.35rem 0.6rem; }
-.thinking { margin-bottom: 0.6rem; color: var(--muted); font-size: 0.9rem; }
-.thinking summary { cursor: pointer; }
-.thinking-body { white-space: pre-wrap; border-left: 2px solid var(--border); padding-left: 0.8rem; margin-top: 0.4rem; }
 .typing { color: var(--muted); letter-spacing: 2px; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: 0.3; } }
 .composer-dock { padding: 0.75rem max(16px, calc((100% - 760px) / 2)) 1rem; }
@@ -583,3 +580,55 @@ details.rule summary { cursor: pointer; }
 .voice-uses .chip { padding: 0.15rem 0.6rem; font-size: 0.82rem; }
 .voice-uses.none { display: block; color: var(--muted); }
 .voice-uses.none > span:first-child { color: var(--warn); }
+
+/* ---- chat details panel (hidden by default) ---- */
+.chat-area { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.chat-area > .chat { min-width: 0; }
+.chat-header { display: flex; align-items: center; gap: 0.5rem; }
+.details-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 0.35rem; color: var(--ink-muted); }
+.details-toggle .tool-status { width: 0.45rem; height: 0.45rem; }
+.chat-details {
+  width: 360px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--line); background: var(--surface);
+}
+.chat-details-head {
+  display: flex; align-items: center; justify-content: space-between; min-height: 3.2rem;
+  padding: 0.4rem 0.5rem 0.4rem 1rem; border-bottom: 1px solid var(--line);
+}
+.chat-details-body { flex: 1; overflow-y: auto; padding: 0.75rem 1rem 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+.details-intro { margin: 0; }
+.details-section > summary {
+  cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0;
+}
+.details-section > summary .icon { color: var(--cyan); }
+.details-section .count { font: var(--type-readout); color: var(--ink-faint); font-weight: 400; }
+.details-section h4 { margin: 0.75rem 0 0.35rem; font-size: 0.7rem; }
+.details-section > p { margin: 0.35rem 0; }
+.details-list { list-style: none; margin: 0.25rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.details-memory { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; font-size: 0.9rem; line-height: 1.45; }
+.details-memory.gone > div { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+.details-memory .link { flex-shrink: 0; }
+.tag.memory-failed { background: var(--warn-bg); color: var(--warn); }
+.tag.memory-removed { color: var(--ink-faint); }
+.details-turn { margin: 0.4rem 0; border-left: 2px solid var(--line); padding-left: 0.75rem; }
+.details-turn > summary { cursor: pointer; font-size: 0.9rem; color: var(--ink-muted); overflow-wrap: anywhere; }
+.details-steps { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.details-thought { white-space: pre-wrap; font-size: 0.85rem; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
+.details-tool { display: flex; align-items: center; gap: 0.4rem; color: var(--ink-muted); min-width: 0; }
+.details-tool-label { white-space: nowrap; flex-shrink: 0; }
+.details-tool code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-size: 0.8rem; }
+.details-agent summary { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.9rem; }
+.details-agent-model { font-weight: 600; overflow-wrap: anywhere; }
+.details-agent-task { margin: 0.35rem 0; color: var(--ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.details-agent .tool-output { max-height: 20rem; overflow: auto; font-size: 0.8rem; }
+.thinking-link { font-size: 0.85rem; color: var(--ink-muted); padding: 0; margin-bottom: 0.4rem; display: block; }
+.thinking-link:hover { color: var(--cyan); }
+.msg-thinking .thinking-link { margin: 0; }
+.details-scrim { display: none; }
+@media (max-width: 860px) {
+  .chat-details {
+    position: fixed; inset: 0 0 0 auto; width: min(100%, 380px); z-index: 30;
+    box-shadow: -8px 0 24px rgb(0 0 0 / 0.35);
+  }
+  .details-scrim { display: block; position: fixed; inset: 0; background: rgb(0 0 0 / 0.4); z-index: 25; }
+}

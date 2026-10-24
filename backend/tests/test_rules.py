@@ -137,3 +137,40 @@ def test_ask_models_puts_one_question_to_several_models(client):  # noqa: F811
     assert sorted(asked) == ["llama3.1:8b", "qwen2.5-coder:7b"]
     assert "## fake/llama3.1:8b\nllama3.1:8b says yes" in out
     assert "Not installed: gpt-9" in out
+
+
+def test_ask_models_logs_each_model_as_a_sub_agent(client):  # noqa: F811
+    import asyncio
+
+    from app.rules import ask_models_tool
+    from app.subagents import Tracker
+
+    def server(request):
+        body = json.loads(request.content)
+        if body["model"] == "broken:1b":
+            return httpx.Response(500, json={"error": "model crashed"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "Yes, ship it"}}]})
+
+    client.app.state.http = httpx.AsyncClient(transport=httpx.MockTransport(server))
+    db = client.app.state.db
+    conv = db.create_conversation("Ship?", "fake/m", {})
+    tracker, events = Tracker(db), []
+    tracker.conversation_id = conv["id"]
+
+    async def emit(event):
+        events.append(event)
+
+    tracker.emit = emit
+    tool = ask_models_tool(client.app, ["fake/llama3.1:8b", "fake/broken:1b"], tracker)
+    out = asyncio.run(tool.run({"question": "Ship it?", "models": ["llama3.1:8b", "broken:1b"]}))
+    assert "Yes, ship it" in out and "(failed:" in out
+    rows = {r["model"]: r for r in db.list_subagents(conv["id"])}
+    assert rows["fake/llama3.1:8b"]["status"] == "done"
+    assert rows["fake/llama3.1:8b"]["result"] == "Yes, ship it"
+    assert (
+        rows["fake/broken:1b"]["status"] == "failed" and rows["fake/llama3.1:8b"]["kind"] == "ask"
+    )
+    assert all(r["task"] == "Ship it?" and r["finished_at"] for r in rows.values())
+    # Each is streamed when it starts and when it finishes.
+    assert [e["status"] for e in events].count("running") == 2 and len(events) == 4
+    assert client.get(f"/api/conversations/{conv['id']}/details", headers=AUTH).json()["subagents"]

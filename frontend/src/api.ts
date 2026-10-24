@@ -73,6 +73,7 @@ export class Api {
   // ---- conversations ----
   conversations = () => this.request<Conversation[]>("/api/conversations");
   conversation = (id: string) => this.request<ConversationDetail>(`/api/conversations/${id}`);
+  conversationDetails = (id: string) => this.request<ChatDetails>(`/api/conversations/${id}/details`);
   createConversation = (title: string, model: string) =>
     this.request<Conversation>("/api/conversations", {
       method: "POST",
@@ -564,9 +565,36 @@ export type AgentEvent =
   | { type: "tool_result"; id: string; ok: boolean; output: string; attachments?: Attachment[] }
   | { type: "notice"; message: string }
   | { type: "answer_done" }
-  | { type: "memory"; action: "remembered" | "updated" | "removed" | "failed"; text: string }
+  | { type: "memory"; action: MemoryAction; text: string; id?: string }
+  | ({ type: "subagent" } & SubAgent)
   | { type: "error"; message: string }
   | { type: "done" };
+
+export type MemoryAction = "remembered" | "updated" | "removed" | "failed" | "recalled";
+
+/** What memory did in one chat (``exists``: the fact is still remembered). */
+export type MemoryLogEntry = {
+  id: string;
+  action: MemoryAction;
+  text: string;
+  memory_id: string | null;
+  created_at: number;
+  exists: boolean;
+};
+
+/** Another model the chat handed work to: one asked for its view, or a media model. */
+export type SubAgent = {
+  id: string;
+  kind: "ask" | "image" | "video" | "speech";
+  model: string;
+  task: string;
+  status: "running" | "done" | "failed" | "stopped";
+  result: string | null;
+  started_at: number;
+  finished_at: number | null;
+};
+
+export type ChatDetails = { memories: MemoryLogEntry[]; subagents: SubAgent[] };
 
 export type WorkspaceInfo = {
   name: string;

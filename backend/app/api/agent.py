@@ -22,6 +22,7 @@ from app import rules as rulesets
 from app.agent import ModelError, history_with_ids, run_agent
 from app.db import Database
 from app.security import require_api_key
+from app.subagents import Tracker, track_media
 from app.tools import Toolset, Workspace, web_tools, workspace_tools
 from app.tools.creative import creative_prompt, creative_tools
 
@@ -193,10 +194,12 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     if web:
         for tool in web_tools(state.settings, state.http):
             toolset.add(tool)
-    # Delegation: image/video/speech tools for whatever media models are installed.
+    # Delegation: image/video/speech tools for whatever media models are installed. The
+    # models they (and ask_models) hand work to are logged as the chat's sub-agents.
+    tracker = Tracker(db)
     media_tools = creative_tools(request.app)
     for tool in media_tools:
-        toolset.add(tool)
+        toolset.add(track_media(request.app, tool, tracker))
 
     settings = {"mode": req.mode, "web": web, "workspace": req.workspace, "purpose": purpose}
     summary: str | None = None
@@ -215,6 +218,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
             conv["folder_id"] = req.folder_id
         history, history_ids = [], []
     conv_id = conv["id"]
+    tracker.conversation_id = conv_id
     db.add_message(conv_id, "user", req.message)
 
     us = state.user_settings
@@ -225,8 +229,10 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     if rulesets.wants_panel(rules, project):
         others = await rulesets.chat_model_ids(request.app)
         if len(others) > 1:
-            toolset.add(rulesets.ask_models_tool(request.app, others))
+            toolset.add(rulesets.ask_models_tool(request.app, others, tracker))
     recalled = await memory.recall(request.app, req.message) if us.memory_enabled else []
+    for fact in recalled:
+        db.log_memory(conv_id, "recalled", fact["text"], fact["id"], once=True)
     system = system_prompt(
         req,
         ws,
@@ -247,6 +253,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     context.trim_tool_results(history)
 
     run = state.agent_runs.create(auto_approve=req.auto_approve)
+    tracker.emit = run.emit
     replies: list[str] = []
 
     def persist(msg: dict) -> None:
@@ -301,6 +308,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
             earlier=earlier[-memory.EARLIER_TURNS :],
         )
         for change in changes:
+            db.log_memory(conv_id, change["action"], change["text"], change.get("id"))
             await run.emit({"type": "memory", **change})
 
     async def work() -> None:

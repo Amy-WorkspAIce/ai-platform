@@ -43,9 +43,14 @@ call, and it can act on those apps through their APIs.
   model lists its known **limits**: content it refuses (or has no filter for), what its
   license forbids, and known weak spots.
 - **ChatGPT-style chat** with saved conversations in collapsible folders (drag and drop),
-  streaming, markdown, collapsible "thinking" for reasoning models, dictation (the mic button,
-  with Whisper installed; browsers allow the microphone only over HTTPS or on localhost, so
-  the container also serves HTTPS on port 8443) and read-aloud.
+  streaming, markdown, dictation (the mic button, with Whisper installed; browsers allow the
+  microphone only over HTTPS or on localhost, so the container also serves HTTPS on port 8443)
+  and read-aloud.
+- **Details panel** for each chat, hidden until you open it (the panel button at the top
+  right): what memory learned in the chat and which facts it recalled from earlier ones (each
+  with Forget), the thought process of reasoning models step by step with the tools used, and
+  **sub-agents**, the other models Amy handed work to (models asked for their view, image,
+  video and voice models) with their status, timing, task and answer.
 - **Voices page**: browse and preview every installed speech model's voices and pick the one
   Amy speaks with; add **your own voices** (record or upload a short sample to copy a voice, or
   describe one in words: "a calm older man with a deep voice"); and install ready-made ones

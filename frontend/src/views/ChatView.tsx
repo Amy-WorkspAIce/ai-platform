@@ -7,6 +7,7 @@ import {
   setPref,
   type AgentEvent,
   type Attachment,
+  type ChatDetails as Details,
   type ModelInfo,
   type StoredMessage,
   type WorkspaceInfo,
@@ -15,6 +16,7 @@ import { AttachmentView, ImageView } from "../media";
 import { routeAudio } from "../devices";
 import { canRecord, extensionFor, useRecorder } from "../recorder";
 import { Icon } from "../icons";
+import { ChatDetails, type Focus, type Section, type Turn } from "./ChatDetails";
 
 const AUTO = "auto";
 
@@ -64,6 +66,7 @@ const SUMMARY_ARG: Record<string, string> = {
   edit_image: "instruction",
   generate_video: "prompt",
   speak: "text",
+  ask_models: "question",
 };
 
 /** Tools whose result is media shown in the chat. */
@@ -82,6 +85,7 @@ const TOOL_LABEL: Record<string, string> = {
   edit_image: "Edit",
   generate_video: "Video",
   speak: "Voice",
+  ask_models: "Asked other models",
 };
 
 // Images the user attached are referenced in their message so the model can edit them.
@@ -138,6 +142,27 @@ function itemsFrom(messages: StoredMessage[]): Item[] {
   return items;
 }
 
+/** Each user message with the thinking and tool use behind its answer (the Details panel). */
+function turnsFrom(items: Item[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const item of items) {
+    if (item.kind === "user") {
+      turns.push({ prompt: item.content.replace(ATTACHED, "").trim().slice(0, 140), steps: [] });
+      continue;
+    }
+    const turn = turns[turns.length - 1];
+    if (!turn) continue;
+    if (item.kind === "assistant") {
+      const text = thinkingOf(item.content, item.reasoning);
+      if (text) turn.steps.push({ kind: "thought", text });
+    } else if (item.kind === "tool") {
+      const ok = item.status === "ok" ? true : item.status === "error" ? false : null;
+      turn.steps.push({ kind: "tool", label: TOOL_LABEL[item.name] ?? item.name, summary: item.summary, ok });
+    }
+  }
+  return turns;
+}
+
 export function ChatView({
   api,
   conversationId,
@@ -165,18 +190,60 @@ export function ChatView({
   const [autoApprove, setAutoApprove] = useState(false);
   const [workspaces, setWorkspaces] = useState<WorkspaceInfo[] | null>(null);
   const convId = useRef(conversationId);
+  // A chat this view started: already on screen (mid-stream), so it isn't reloaded.
+  const created = useRef<string | null>(null);
   const runId = useRef<string | null>(null);
   const sendCount = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   // The model the server picked last on Auto, so the chat only notes when it changes.
   const autoPick = useRef("");
+  // The Details panel (hidden by default; stays open across chats once opened).
+  // On phones it covers the chat, so it always starts hidden there.
+  const [detailsOpen, setDetailsOpen] = useState(() => getPref("chatDetails") === "open" && window.innerWidth > 860);
+  const [details, setDetails] = useState<Details | null>(null);
+  const [focus, setFocus] = useState<Focus | null>(null);
   const ids = models?.map((m) => m.id) ?? [];
   const modelInfo = models?.find((m) => m.id === model);
 
+  function loadDetails() {
+    const id = convId.current;
+    if (id) api.conversationDetails(id).then(setDetails).catch(() => {});
+  }
+
+  function showDetails(section: Section, turn?: number) {
+    setDetailsOpen(true);
+    setPref("chatDetails", "open");
+    setFocus((f) => ({ section, turn, nonce: (f?.nonce ?? 0) + 1 }));
+  }
+
+  function hideDetails() {
+    setDetailsOpen(false);
+    setPref("chatDetails", "closed");
+  }
+
+  async function forget(memoryId: string) {
+    try {
+      await api.deleteFact(memoryId);
+      loadDetails();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function upsertSubagent(agent: Details["subagents"][number]) {
+    setDetails((d) => {
+      const base = d ?? { memories: [], subagents: [] };
+      const others = base.subagents.filter((a) => a.id !== agent.id);
+      return { ...base, subagents: [...others, agent].sort((a, b) => a.started_at - b.started_at) };
+    });
+  }
+
+  useEffect(loadDetails, [api, conversationId]);
+
   // Load a saved conversation.
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || conversationId === created.current) return;
     let cancelled = false;
     api
       .conversation(conversationId)
@@ -249,9 +316,10 @@ export function ChatView({
       case "start":
         runId.current = e.run_id;
         if (!convId.current) {
-          convId.current = e.conversation_id;
+          convId.current = created.current = e.conversation_id;
           onSaved(e.conversation_id);
         }
+        loadDetails(); // memories recalled for this message
         break;
       case "text":
         appendText("content", e.delta);
@@ -283,8 +351,14 @@ export function ChatView({
         setBusy(false);
         break;
       case "memory": {
-        const verb = { remembered: "Remembered", updated: "Updated memory", removed: "Forgot", failed: "Couldn't update memory" }[e.action];
+        const verb = { remembered: "Remembered", updated: "Updated memory", removed: "Forgot", failed: "Couldn't update memory", recalled: "Recalled" }[e.action];
         setItems((prev) => [...prev, { kind: "notice", text: `${verb}: ${e.text}`, memory: true }]);
+        loadDetails();
+        break;
+      }
+      case "subagent": {
+        const { type: _, ...agent } = e;
+        upsertSubagent(agent);
         break;
       }
       case "error":
@@ -369,6 +443,7 @@ export function ChatView({
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
+      loadDetails();
       if (sendCount.current !== mine) return;
       setBusy(false);
       runId.current = null;
@@ -507,8 +582,16 @@ export function ChatView({
   );
 
   const lastIndex = items.length - 1;
+  const turns = turnsFrom(items);
+  const running = details?.subagents.filter((a) => a.status === "running").length ?? 0;
+  const lastItem = items[lastIndex];
+  const thinkingNow = busy && lastItem?.kind === "assistant" && !splitThinking(lastItem.content).answer && !!thinkingOf(lastItem.content, lastItem.reasoning);
+  // Which turn each item belongs to, so "Thought process" opens the right one.
+  let turnIndex = -1;
+  const turnOf = items.map((item) => (item.kind === "user" ? ++turnIndex : turnIndex));
 
   return (
+    <div className="chat-area">
     <div className="chat">
       <div className="chat-header">
         {ids.length > 0 && (
@@ -528,6 +611,17 @@ export function ChatView({
               </option>
             ))}
           </select>
+        )}
+        {!detailsOpen && (
+          <button
+            type="button"
+            className="icon-button details-toggle"
+            onClick={() => showDetails(running ? "subagents" : "memory")}
+            title="Details: memory, thought process and sub-agents for this chat"
+          >
+            <Icon name="panel" size={18} label="Show details" />
+            {running > 0 && <span className="tool-status running" aria-label={`${running} sub-agents running`} />}
+          </button>
         )}
       </div>
 
@@ -560,8 +654,8 @@ export function ChatView({
                 <UserMessage key={i} api={api} content={item.content} />
               ) : item.kind === "notice" ? (
                 <p key={i} className={`notice muted small ${item.memory ? "memory-note" : ""}`}>
-                  {item.memory && onOpenMemory ? (
-                    <button className="link" onClick={onOpenMemory} title="See what Amy remembers">
+                  {item.memory ? (
+                    <button className="link" onClick={() => showDetails("memory")} title="See what Amy remembers from this chat">
                       <Icon name="orbit" size={14} /> {item.text}
                     </button>
                   ) : (
@@ -576,6 +670,7 @@ export function ChatView({
                   reasoning={item.reasoning}
                   ttsModel={ttsModel}
                   streaming={busy && i === lastIndex}
+                  onShowThinking={() => showDetails("thinking", turnOf[i])}
                 />
               ) : (
                 <ToolCard key={item.id} api={api} item={item} onDecide={decide} />
@@ -589,6 +684,21 @@ export function ChatView({
         </>
       )}
     </div>
+    {detailsOpen && (
+      <>
+        <div className="details-scrim" onClick={hideDetails} />
+        <ChatDetails
+          details={details}
+          turns={turns}
+          thinkingNow={thinkingNow}
+          focus={focus}
+          onClose={hideDetails}
+          onForget={(id) => void forget(id)}
+          onOpenMemory={onOpenMemory}
+        />
+      </>
+    )}
+    </div>
   );
 }
 
@@ -597,6 +707,11 @@ function splitThinking(content: string): { thinking: string; answer: string } {
   const match = content.match(/^\s*<think>([\s\S]*?)(<\/think>|$)([\s\S]*)$/);
   if (!match) return { thinking: "", answer: content };
   return { thinking: match[1].trim(), answer: match[3].trimStart() };
+}
+
+/** Everything a reply thought: streamed reasoning plus any inline <think> block. */
+function thinkingOf(content: string, reasoning: string): string {
+  return [reasoning, splitThinking(content).thinking].filter(Boolean).join("\n").trim();
 }
 
 /** Rough markdown-to-speech cleanup: drop code blocks and formatting characters. */
@@ -617,26 +732,31 @@ function AssistantMessage({
   reasoning,
   ttsModel,
   streaming,
+  onShowThinking,
 }: {
   api: Api;
   content: string;
   reasoning: string;
   ttsModel?: string;
   streaming: boolean;
+  onShowThinking: () => void;
 }) {
-  const inline = splitThinking(content);
-  const thinking = [reasoning, inline.thinking].filter(Boolean).join("\n").trim();
-  const answer = inline.answer;
+  const thinking = thinkingOf(content, reasoning);
+  const answer = splitThinking(content).answer;
   const stillThinking = streaming && !answer;
+
+  // The thinking itself lives in the Details panel; the reply only links to it.
+  const link = thinking && (
+    <button type="button" className={`link thinking-link ${stillThinking ? "typing" : ""}`} onClick={onShowThinking} title="Read the thought process in Details">
+      {stillThinking ? "Thinking…" : "Thought process"}
+    </button>
+  );
+  // A step that only thought (before using a tool) is just the link, not an empty reply.
+  if (thinking && !answer) return <div className="msg-thinking">{link}</div>;
 
   return (
     <div className="msg assistant">
-      {thinking && (
-        <details className="thinking" open={stillThinking}>
-          <summary>{stillThinking ? "Thinking…" : "Thought process"}</summary>
-          <div className="thinking-body">{thinking}</div>
-        </details>
-      )}
+      {link}
       {answer ? (
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>

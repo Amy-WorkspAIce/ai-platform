@@ -19,6 +19,7 @@ from pathlib import Path
 import httpx
 
 from app import routing
+from app.subagents import Tracker
 from app.tools import Tool
 
 log = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ ASK_SYSTEM = """You're one of several models asked the same question so the user
 one view. Answer it directly and on your own merits; say where you're unsure."""
 
 
-def ask_models_tool(app, models: list[str]) -> Tool:
+def ask_models_tool(app, models: list[str], tracker: Tracker | None = None) -> Tool:
     async def run(args: dict) -> str:
         question = str(args.get("question") or "").strip()
         wanted = [m for m in (args.get("models") or []) if isinstance(m, str)][:5]
@@ -133,8 +134,12 @@ def ask_models_tool(app, models: list[str]) -> Tool:
                     {"role": "user", "content": question},
                 ],
             }
+
+            async def ask() -> str:
+                return (await provider.quick_reply(app.state.http, payload, timeout=600)).strip()
+
             try:
-                answer = await provider.quick_reply(app.state.http, payload, timeout=600)
+                answer = await (tracker.run("ask", model, question, ask) if tracker else ask())
             except (httpx.HTTPError, ValueError, KeyError, IndexError) as exc:
                 answer = f"(failed: {str(exc) or type(exc).__name__})"
             return f"## {model}\n{answer.strip()}"

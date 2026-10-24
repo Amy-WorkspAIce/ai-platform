@@ -45,6 +45,7 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | DELETE | `/api/models/{model}` | Deletes an installed model. |
 | GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model", "folder_id"?}`) saved chats. |
 | GET/PATCH/DELETE | `/api/conversations/{id}` | Fetch with messages; PATCH `{"title"?, "folder_id"?}` renames or moves (`"folder_id": ""` removes it from its folder); delete. |
+| GET | `/api/conversations/{id}/details` | The chat's Details panel: `memories` (what memory did in it, oldest first: `{id, action, text, memory_id, created_at, exists}`, `action` one of `remembered`, `updated`, `removed`, `failed`, `recalled`; `exists` is false once the fact is forgotten) and `subagents` (other models it handed work to: `{id, kind, model, task, status, result, started_at, finished_at}`, `kind` one of `ask`, `image`, `video`, `speech`; `status` one of `running`, `done`, `failed`, `stopped`). Agent chat streams the same rows live as `subagent` events. |
 | GET/POST | `/api/folders` | List chat folders or create one (`{"name"}`). |
 | PATCH/DELETE | `/api/folders/{id}` | `{"name"?, "collapsed"?, "position"?}`; deleting a folder keeps its chats (they become unfiled). |
 | GET | `/api/memory?q=` | Remembered facts plus `enabled`, `auto`, `embedding_model`, `categories`. With `q`, ranked by relevance (by meaning when an embedding model is installed). |

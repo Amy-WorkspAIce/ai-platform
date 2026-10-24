@@ -90,6 +90,30 @@ CREATE TABLE IF NOT EXISTS rules (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rules_scope ON rules(scope);
+-- What memory did in each chat: facts remembered, updated or removed there, failed updates,
+-- and facts from earlier chats recalled into it (once each).
+CREATE TABLE IF NOT EXISTS memory_log (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,  -- remembered, updated, removed, failed or recalled
+    text TEXT NOT NULL,
+    memory_id TEXT,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS memory_log_by_conversation ON memory_log(conversation_id, created_at);
+-- Other models a chat handed work to (app.subagents).
+CREATE TABLE IF NOT EXISTS subagents (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,  -- ask (another chat model), image, video or speech
+    model TEXT NOT NULL,
+    task TEXT NOT NULL,
+    status TEXT NOT NULL,  -- running, done, failed or stopped
+    result TEXT,
+    started_at REAL NOT NULL,
+    finished_at REAL
+);
+CREATE INDEX IF NOT EXISTS subagents_by_conversation ON subagents(conversation_id, started_at);
 -- Rules from a wider scope turned off in a narrower one (a global rule off in one folder).
 CREATE TABLE IF NOT EXISTS rule_exclusions (
     scope TEXT NOT NULL,
@@ -128,6 +152,11 @@ class Database:
                 cols = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
                 if column not in cols:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            # Sub-agents still "running" belonged to a process that has since stopped.
+            db.execute(
+                "UPDATE subagents SET status = 'stopped', result = 'Stopped when Amy restarted', "
+                "finished_at = started_at WHERE status = 'running'"
+            )
 
     @contextmanager
     def connect(self):
@@ -416,6 +445,86 @@ class Database:
             deleted = db.execute("DELETE FROM folders WHERE id = ?", (folder_id,)).rowcount > 0
         self.delete_scope(f"folder:{folder_id}")
         return deleted
+
+    # ---- per-chat details: memory log and sub-agents ----
+
+    def log_memory(
+        self,
+        conv_id: str,
+        action: str,
+        text: str,
+        memory_id: str | None = None,
+        once: bool = False,
+    ) -> None:
+        """Note what memory did in a chat. ``once``: skip if this fact already has this action."""
+        with self.connect() as db:
+            if (
+                once
+                and db.execute(
+                    "SELECT 1 FROM memory_log WHERE conversation_id = ? AND action = ? "
+                    "AND memory_id = ?",
+                    (conv_id, action, memory_id),
+                ).fetchone()
+            ):
+                return
+            db.execute(
+                "INSERT INTO memory_log VALUES (?, ?, ?, ?, ?, ?)",
+                (new_id(), conv_id, action, text, memory_id, time.time()),
+            )
+
+    def memory_log(self, conv_id: str) -> list[dict]:
+        """A chat's memory log, oldest first, with each fact's current text (``exists``: the
+        fact is still remembered)."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT l.id, l.action, l.memory_id, l.created_at, "
+                "COALESCE(m.text, l.text) AS text, "
+                "m.id IS NOT NULL AS exists_ FROM memory_log l "
+                "LEFT JOIN memories m ON m.id = l.memory_id "
+                "WHERE l.conversation_id = ? ORDER BY l.created_at",
+                (conv_id,),
+            ).fetchall()
+        return [
+            {**{k: r[k] for k in r.keys() if k != "exists_"}, "exists": bool(r["exists_"])}
+            for r in rows
+        ]
+
+    def add_subagent(self, conv_id: str, kind: str, model: str, task: str) -> dict:
+        row = {
+            "id": new_id(),
+            "conversation_id": conv_id,
+            "kind": kind,
+            "model": model,
+            "task": task,
+            "status": "running",
+            "result": None,
+            "started_at": time.time(),
+            "finished_at": None,
+        }
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO subagents VALUES (:id, :conversation_id, :kind, :model, :task, "
+                ":status, :result, :started_at, :finished_at)",
+                row,
+            )
+        return row
+
+    def finish_subagent(self, subagent_id: str, status: str, result: str) -> dict:
+        with self.connect() as db:
+            db.execute(
+                "UPDATE subagents SET status = ?, result = ?, finished_at = ? WHERE id = ?",
+                (status, result, time.time(), subagent_id),
+            )
+            row = db.execute("SELECT * FROM subagents WHERE id = ?", (subagent_id,)).fetchone()
+        return dict(row)
+
+    def list_subagents(self, conv_id: str) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM subagents WHERE conversation_id = ? ORDER BY started_at",
+                (conv_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # ---- memories ----
 

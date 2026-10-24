@@ -16,6 +16,8 @@ const PATHS = {
   video: "M3 6h13v12H3zM16 10l5-3v10l-5-3",
   external: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
   rules: "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
+  // A window with a side column: the chat's Details panel.
+  panel: "M3 5h18v14H3zM15 5v14",
   // The Orbit, simplified: Amy's presence (memory notices).
   orbit: "M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zM2.5 14.6c-.6-2.2 3.3-5 8.7-6.3s10.3-.6 10.9 1.6-3.3 5-8.7 6.3-10.3.6-10.9-1.6z",
 } as const;

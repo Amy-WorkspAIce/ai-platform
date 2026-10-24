@@ -1,6 +1,6 @@
 [project]
 name = "amy-ai-platform"
-version = "0.12.4"
+version = "0.12.5"
 description = "Self-hosted AI platform: model hosting, OpenAI-compatible API, and connectors for the Amy WorkspAIce suite."
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.11"

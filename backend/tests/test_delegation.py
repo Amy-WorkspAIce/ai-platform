@@ -299,3 +299,51 @@ def test_default_voice_is_used_when_none_is_asked_for(client):
         json={"model": "audio/kokoro-82m", "input": "hi", "voice": "af_bella"},
     )
     assert client.fake.calls[-1][1]["voice"] == "af_bella"  # an explicit voice wins
+
+
+def test_media_tools_log_the_model_they_hand_work_to(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from app import subagents
+    from app.db import Database
+    from app.tools import Tool
+
+    db = Database(tmp_path / "amy.db")
+    conv = db.create_conversation("Cat", "m", {})
+    tracker = subagents.Tracker(db)
+    tracker.conversation_id = conv["id"]
+    monkeypatch.setattr(
+        subagents.delegation, "choose", lambda app, kind, requested: {"name": f"{kind} model"}
+    )
+
+    async def draw(args):
+        return {"content": "Created image abc", "attachments": []}
+
+    async def fail(args):
+        raise RuntimeError("GPU on fire")
+
+    image = Tool("generate_image", "", {}, draw, summary_arg="prompt")
+    app = SimpleNamespace()
+    asyncio.run(subagents.track_media(app, image, tracker).run({"prompt": "a cat"}))
+    voice = subagents.track_media(app, Tool("speak", "", {}, fail, summary_arg="text"), tracker)
+    try:
+        asyncio.run(voice.run({"text": "hello"}))
+    except RuntimeError:
+        pass
+    done, failed = db.list_subagents(conv["id"])
+    assert (done["kind"], done["model"], done["task"], done["status"]) == (
+        "image",
+        "image model",
+        "a cat",
+        "done",
+    )
+    assert done["result"] == "Created image abc"
+    assert (failed["kind"], failed["status"], failed["result"]) == (
+        "speech",
+        "failed",
+        "GPU on fire",
+    )
+    # Tools that don't hand work to another model are left as they are.
+    web = Tool("web_search", "", {}, draw)
+    assert subagents.track_media(app, web, tracker) is web

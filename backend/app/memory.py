@@ -232,7 +232,8 @@ async def extract(
     conversation_id: str,
     earlier: list[str] | None = None,
 ) -> list[dict]:
-    """Update memory from one exchange. Returns changes: [{"action", "text"}]."""
+    """Update memory from one exchange. Returns changes: [{"action", "text", "id"}] (no id
+    when the update failed)."""
     db = app.state.db
     known = await recall(app, user_message, limit=30)
     known_text = "\n".join(f"{f['id']}: {f['text']}" for f in known) or "(none yet)"
@@ -278,7 +279,7 @@ async def extract(
 
     for fid in data.get("remove") or []:
         if isinstance(fid, str) and fid in known_ids and db.delete_memory(fid):
-            changes.append({"action": "removed", "text": known_ids[fid]["text"]})
+            changes.append({"action": "removed", "text": known_ids[fid]["text"], "id": fid})
     for item in data.get("update") or []:
         if not isinstance(item, dict) or item.get("id") not in known_ids:
             continue
@@ -286,7 +287,7 @@ async def extract(
         if text and text != known_ids[item["id"]]["text"]:
             emb, emb_m = await vector(text)
             db.update_memory(item["id"], text=text, embedding=emb, embedding_model=emb_m)
-            changes.append({"action": "updated", "text": text})
+            changes.append({"action": "updated", "text": text, "id": item["id"]})
     # Also block re-adding facts just updated or removed (models sometimes do both).
     existing = {f["text"].lower() for f in db.list_memories()} | {f["text"].lower() for f in known}
     for item in data.get("add") or []:
@@ -296,7 +297,7 @@ async def extract(
         category = item.get("category") if isinstance(item, dict) else None
         category = category if category in CATEGORIES else "general"
         emb, emb_m = await vector(text)
-        db.add_memory(text, category, conversation_id, emb, emb_m)
+        fact = db.add_memory(text, category, conversation_id, emb, emb_m)
         existing.add(text.lower())
-        changes.append({"action": "remembered", "text": text})
+        changes.append({"action": "remembered", "text": text, "id": fact["id"]})
     return changes

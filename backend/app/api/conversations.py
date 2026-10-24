@@ -56,6 +56,14 @@ def get_conversation(conv_id: str, db: Database = Depends(get_db)) -> dict:
     return conv
 
 
+@router.get("/{conv_id}/details")
+def conversation_details(conv_id: str, db: Database = Depends(get_db)) -> dict:
+    """The chat's Details panel: what memory did here, and the sub-agents it used."""
+    if db.get_conversation(conv_id) is None:
+        raise HTTPException(404, "Conversation not found")
+    return {"memories": db.memory_log(conv_id), "subagents": db.list_subagents(conv_id)}
+
+
 @router.patch("/{conv_id}")
 def update_conversation(
     conv_id: str, body: ConversationUpdate, db: Database = Depends(get_db)
