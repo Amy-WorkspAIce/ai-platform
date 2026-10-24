@@ -147,6 +147,15 @@ downloads the model to `/data/models/image/<model>`. Engines run as **worker
 subprocesses** (stdlib HTTP on 127.0.0.1) that start on the first request and stop
 after `AMY_ENGINE_IDLE_MINUTES` idle, freeing GPU memory. Before generating an image,
 the platform asks Ollama to unload its models so the image pipeline gets the VRAM.
+Any engine call that runs out of GPU memory (two voice models, or a voice model next to the
+chat model on a small GPU) stops the idle workers, unloads Ollama's models and retries once.
+
+**Matching torch.** torchaudio 2.9+ doesn't declare the torch it was built for, so when a
+speech library pins neither, pip can pair a CUDA 12.8 torchaudio with the newest torch from
+PyPI (built for CUDA 13), and torchaudio's library then fails to load. After installing a
+runtime, `EngineManager._align_torch` reinstalls torch from the machine's wheel index at
+torchaudio's version (`torch_fix`); runtimes installed earlier are fixed once at startup
+(`repair`).
 
 | Engine | Packages | Models |
 |---|---|---|

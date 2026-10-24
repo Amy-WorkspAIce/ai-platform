@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app import catalog
 from app.config import Settings
-from app.engines import ENGINES, EngineManager
+from app.engines import ENGINES, EngineError, EngineManager, torch_fix
 from app.hardware import Gpu, Hardware
 from app.jobs import JobRegistry
 from app.main import create_app
@@ -276,3 +276,69 @@ def test_image_endpoint_rejects_video_models(client):
         json={"model": "image/Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "prompt": "x"},
     )
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("versions", "flavour", "fix"),
+    [
+        # A CUDA 12.8 torchaudio next to the newest torch from PyPI (its library won't load).
+        (
+            {"torch": "2.14.1", "torchaudio": "2.11.0+cu128", "cuda": "13"},
+            "cu128",
+            ["torch==2.11.0+cu128"],
+        ),
+        ({"torch": "2.11.0+cu128", "torchaudio": "2.11.0+cu128"}, "cu128", []),
+        # A library pins torch and PyPI's build matches the CUDA index: left alone.
+        ({"torch": "2.9.1", "cuda": "12"}, "cu128", []),
+        ({"torch": "2.12.0", "cuda": "13"}, "cu128", ["torch==2.12.0+cu128"]),
+        ({"torch": "2.14.1", "torchaudio": "2.11.0"}, "cpu", ["torch==2.11.0+cpu"]),
+        ({"torch": "2.8.0"}, "cpu", []),
+        ({}, "cu128", []),
+    ],
+)
+def test_torch_matches_torchaudio_and_machine(versions, flavour, fix):
+    assert torch_fix(versions, flavour) == fix
+
+
+def test_out_of_gpu_memory_frees_the_gpu_and_retries(tmp_path, monkeypatch):
+    engines = EngineManager(tmp_path, JobRegistry(), gpu=True, torch_index_url="x")
+    calls, freed = [], []
+
+    async def fake_call(engine, path, payload, timeout):
+        calls.append(engine)
+        if len(calls) == 1:
+            raise EngineError("OutOfMemoryError: CUDA out of memory. Tried to allocate 16.00 MiB")
+        return httpx.Response(200, json={"ok": True})
+
+    async def release():
+        freed.append("ollama")
+
+    monkeypatch.setattr(engines, "_call", fake_call)
+    engines.release_gpu = release
+    resp = asyncio.run(engines.call("tts-qwen", "/speak", {}))
+    assert resp.json() == {"ok": True} and calls == ["tts-qwen", "tts-qwen"] and freed == ["ollama"]
+
+    # Other errors aren't retried.
+    async def broken(engine, path, payload, timeout):
+        raise EngineError("Could not load this library")
+
+    monkeypatch.setattr(engines, "_call", broken)
+    with pytest.raises(EngineError, match="Could not load"):
+        asyncio.run(engines.call("tts-qwen", "/speak", {}))
+
+
+def test_repair_matches_torch_once(tmp_path, monkeypatch):
+    engines = EngineManager(tmp_path, JobRegistry(), gpu=True, torch_index_url="x")
+    spec = ENGINES["tts-qwen"]
+    engines.root.joinpath(spec.id).mkdir(parents=True)
+    engines._marker(spec.id).write_text(json.dumps({"version": spec.version, "gpu": True}))
+    aligned = []
+
+    async def fake_align(engine, state):
+        aligned.append(engine)
+
+    monkeypatch.setattr(engines, "_align_torch", fake_align)
+    asyncio.run(engines.repair())
+    asyncio.run(engines.repair())
+    assert aligned == ["tts-qwen"]
+    assert json.loads(engines._marker(spec.id).read_text())["torch_aligned"] is True

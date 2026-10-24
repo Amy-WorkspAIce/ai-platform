@@ -24,11 +24,13 @@ import io
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import sys
 import tarfile
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -107,6 +109,44 @@ ENGINES: dict[str, EngineSpec] = {
 
 
 OLD_TORCHAUDIO = ("torch<2.9", "torchaudio<2.9")
+
+# What a runtime's venv has of PyTorch: versions, and the CUDA major version torch was built for.
+TORCH_VERSIONS = r"""
+import importlib.metadata as m, json, re
+out = {}
+for p in ("torch", "torchaudio"):
+    try:
+        out[p] = m.version(p)
+    except m.PackageNotFoundError:
+        pass
+reqs = (m.requires("torch") or []) if "torch" in out else []
+cuda = [r for r in reqs if r.startswith(("nvidia-cuda-runtime", "cuda-toolkit"))]
+found = re.search(r"==(\d+)\.", cuda[0]) if cuda else None
+out["cuda"] = found.group(1) if found else ""
+print(json.dumps(out))
+"""
+OUT_OF_MEMORY = re.compile(r"out of memory|OutOfMemoryError", re.I)
+
+
+def torch_fix(versions: dict, flavour: str) -> list[str]:
+    """The torch to reinstall so it matches torchaudio and this machine's wheel index, or [].
+
+    torchaudio 2.9+ doesn't declare which torch it needs, and its compiled library loads only
+    with the torch it was built for. When a library pins neither, pip takes torchaudio from
+    the PyTorch index and the newest torch from PyPI, which can also be built for a newer
+    CUDA than the index (``flavour``: "cu128", or "cpu") was chosen for."""
+    torch = versions.get("torch")
+    if not torch:
+        return []
+    release, _, local = torch.partition("+")
+    audio = versions.get("torchaudio")
+    target = audio.partition("+")[0] if audio else release
+    if flavour.startswith("cu"):
+        built_for = local[2:-1] if local.startswith("cu") else versions.get("cuda", "")
+        ok = release == target and built_for == flavour[2:-1]
+    else:
+        ok = release == target
+    return [] if ok else [f"torch=={target}+{flavour}"]
 
 
 def _speech_runtime(id: str, name: str, *packages: str, **options) -> EngineSpec:
@@ -241,6 +281,8 @@ class EngineManager:
         self._reaper: asyncio.Task | None = None
         # Runtimes with an install under way, so deleting a model never removes one mid-install.
         self._installing: collections.Counter[str] = collections.Counter()
+        # Frees GPU memory held outside the engines (Ollama's language models), set by the app.
+        self.release_gpu: Callable[[], Awaitable[None]] | None = None
 
     # ---- paths & state ----
 
@@ -396,7 +438,7 @@ class EngineManager:
             "--progress-bar",
             "off",
         ]
-        index = self.torch_index_url if self.gpu else "https://download.pytorch.org/whl/cpu"
+        index = self.torch_index
         if spec.needs_torch and not upgrade and not spec.torch_pinned:
             await self._run(state, [*pip, "torch", "--index-url", index], spec.name)
         packages = list(spec.packages) + (list(spec.gpu_packages) if self.gpu else [])
@@ -404,7 +446,55 @@ class EngineManager:
         await self._run(state, [*pip, *packages, *extra], spec.name)
         for source, package in spec.overlays:
             await self._overlay(spec, source, package)
-        self._marker(spec.id).write_text(json.dumps({"version": spec.version, "gpu": self.gpu}))
+        if spec.torch_pinned:
+            await self._align_torch(spec.id, state)
+        info = {"version": spec.version, "gpu": self.gpu, "torch_aligned": spec.torch_pinned}
+        self._marker(spec.id).write_text(json.dumps(info))
+
+    @property
+    def torch_index(self) -> str:
+        return self.torch_index_url if self.gpu else "https://download.pytorch.org/whl/cpu"
+
+    async def _align_torch(self, engine: str, state: PullState) -> None:
+        """Reinstall torch if it doesn't match torchaudio or this machine (see ``torch_fix``)."""
+        proc = await asyncio.create_subprocess_exec(
+            str(self.python(engine)),
+            "-c",
+            TORCH_VERSIONS,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await proc.communicate()
+        try:
+            versions = json.loads(out)
+        except ValueError:
+            return
+        flavour = self.torch_index.rstrip("/").rsplit("/", 1)[-1]
+        fix = torch_fix(versions, flavour)
+        if not fix:
+            return
+        log.info("%s: replacing torch %s with %s", engine, versions.get("torch"), fix[0])
+        cmd = [str(self.python(engine)), "-m", "pip", "install", "--no-cache-dir"]
+        cmd += ["--progress-bar", "off", *fix]
+        if versions.get("torchaudio"):
+            cmd.append(f"torchaudio=={versions['torchaudio']}")
+        try:
+            await self._run(state, [*cmd, "--index-url", self.torch_index], ENGINES[engine].name)
+        except EngineError as exc:
+            log.warning("%s: couldn't match torch to this machine: %s", engine, exc)
+
+    async def repair(self) -> None:
+        """Fix runtimes installed before torch was matched to torchaudio (``_align_torch``)."""
+        for engine, spec in ENGINES.items():
+            info = self._installed_info(engine)
+            if not spec.torch_pinned or info.get("torch_aligned"):
+                continue
+            if not self.engine_installed(engine):
+                continue
+            async with self._start_locks.setdefault(engine, asyncio.Lock()):
+                await self.stop_worker(engine)
+                await self._align_torch(engine, PullState(model=engine))
+                self._marker(engine).write_text(json.dumps(info | {"torch_aligned": True}))
 
     def site_packages(self, engine: str) -> Path:
         found = sorted(self.venv(engine).glob("lib/python*/site-packages"))
@@ -565,6 +655,34 @@ class EngineManager:
     async def call(
         self, engine: str, path: str, payload: dict, timeout: float = 1800
     ) -> httpx.Response:
+        try:
+            return await self._call(engine, path, payload, timeout)
+        except EngineError as exc:
+            if not (self.gpu and OUT_OF_MEMORY.search(str(exc))):
+                raise
+        # Out of GPU memory: free what other models hold (and this worker's half-loaded
+        # state), then try once more.
+        log.info("%s ran out of GPU memory; freeing the GPU and retrying", ENGINES[engine].name)
+        await self.free_gpu()
+        try:
+            return await self._call(engine, path, payload, timeout)
+        except EngineError as exc:
+            if not OUT_OF_MEMORY.search(str(exc)):
+                raise
+            raise EngineError(
+                "Not enough GPU memory for this model, even with every other model unloaded. "
+                f"Try a smaller model. ({str(exc)[:200]})"
+            ) from exc
+
+    async def free_gpu(self) -> None:
+        """Stop idle workers and unload language models, to give one model the whole GPU."""
+        for engine, w in list(self.workers.items()):
+            if w.busy == 0:
+                await self.stop_worker(engine)
+        if self.release_gpu:
+            await self.release_gpu()
+
+    async def _call(self, engine: str, path: str, payload: dict, timeout: float) -> httpx.Response:
         w = await self._ensure_worker(engine)
         w.busy += 1
         try:

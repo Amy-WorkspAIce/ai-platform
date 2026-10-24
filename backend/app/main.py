@@ -48,6 +48,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.ollama_admin = OllamaAdmin(
                 settings.ollama_url, app.state.http, app.state.jobs
             )
+            app.state.engines.release_gpu = app.state.ollama_admin.unload_all
+        repair = asyncio.create_task(app.state.engines.repair())
+        app.state.background_tasks.add(repair)
+        repair.add_done_callback(app.state.background_tasks.discard)
         yield
         if warm:
             warm.cancel()
