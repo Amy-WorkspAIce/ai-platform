@@ -201,7 +201,8 @@ button.danger { color: var(--error); }
 .banner { cursor: pointer; }
 
 /* ---- message actions, mic ---- */
-.msg-actions { margin-top: 0.4rem; }
+.msg-actions { margin-top: 0.4rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.speak-error { flex-basis: 100%; overflow-wrap: anywhere; }
 .icon-button { background: none; border: 1px solid transparent; color: var(--muted); padding: 0.3rem 0.5rem; font-size: 0.85rem; border-radius: var(--radius-sm); }
 .icon-button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .composer .icon-button { align-self: flex-end; font-size: 1rem; }

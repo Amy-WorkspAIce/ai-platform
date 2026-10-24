@@ -929,6 +929,7 @@ function WorkspacePicker({
 
 function SpeakButton({ api, model, text }: { api: Api; model: string; text: string }) {
   const [state, setState] = useState<"idle" | "loading" | "playing">("idle");
+  const [error, setError] = useState("");
   const audio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => () => audio.current?.pause(), []);
@@ -940,6 +941,7 @@ function SpeakButton({ api, model, text }: { api: Api; model: string; text: stri
       return;
     }
     setState("loading");
+    setError("");
     try {
       const url = URL.createObjectURL(await api.speak(model, text));
       const a = new Audio(url);
@@ -951,12 +953,14 @@ function SpeakButton({ api, model, text }: { api: Api; model: string; text: stri
       audio.current = a;
       await a.play();
       setState("playing");
-    } catch {
+    } catch (e) {
       setState("idle");
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
   return (
+    <>
     <button className="icon-button" onClick={toggle} title="Read aloud" disabled={state === "loading"}>
       {state === "loading" ? (
         "…"
@@ -970,6 +974,8 @@ function SpeakButton({ api, model, text }: { api: Api; model: string; text: stri
         </>
       )}
     </button>
+    {error && <span className="error small speak-error">Couldn't read this aloud: {error}</span>}
+    </>
   );
 }
 
