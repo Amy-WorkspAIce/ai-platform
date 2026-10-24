@@ -13,7 +13,7 @@ import time
 import uuid
 from pathlib import Path
 
-from app import catalog, voices
+from app import catalog, delegation, voices
 from app.engines import EngineError
 
 log = logging.getLogger(__name__)
@@ -268,16 +268,32 @@ async def _run_video(app, job: dict, payload: dict) -> None:
 # ---------------------------------------------------------------- audio
 
 
-def default_voice(app) -> str | None:
+def speech_model(app, model: str) -> str:
+    """``auto`` is the speech model chosen on the Voices page (or the best installed)."""
+    if model != "auto":
+        return model
+    picked = delegation.choose(app, "speech")
+    if not picked:
+        raise StudioError("No text-to-speech model is installed. Add one on the Models page.", 400)
+    return picked["id"]
+
+
+def default_voice(app, model: str) -> str | None:
+    """The voice chosen on the Voices page, for the model it was chosen with. Another model
+    doesn't have that voice, so it speaks in its own default."""
     us = getattr(app.state, "user_settings", None)
-    return us.voice if us else None
+    if not us or not us.voice:
+        return None
+    active = delegation.choose(app, "speech")
+    return us.voice if active and active["id"] == model else None
 
 
 async def speak(
     app, model: str, text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "wav"
 ) -> bytes:
+    model = speech_model(app, model)
     model_dir, variant = resolve(app, model, "audio", "speech")
-    voice = voice or default_voice(app)
+    voice = voice or default_voice(app, model)
     try:
         resp = await app.state.engines.call(
             app.state.engines.runtime("audio", variant),
@@ -300,7 +316,8 @@ async def speak(
 async def speak_to_library(
     app, model: str, text: str, voice: str | None = None, speed: float = 1.0
 ) -> dict:
-    voice = voice or default_voice(app)
+    model = speech_model(app, model)
+    voice = voice or default_voice(app, model)
     audio = await speak(app, model, text, voice, speed)
     audio_id = uuid.uuid4().hex
     (data_dir(app, "audio") / f"{audio_id}.wav").write_bytes(audio)

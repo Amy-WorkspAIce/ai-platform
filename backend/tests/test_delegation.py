@@ -301,6 +301,35 @@ def test_default_voice_is_used_when_none_is_asked_for(client):
     assert client.fake.calls[-1][1]["voice"] == "af_bella"  # an explicit voice wins
 
 
+def test_auto_speaks_with_the_chosen_model_and_its_voice(client):
+    install(client.app, "audio", "kokoro-82m")
+    repo = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+    qwen = {
+        "task": "speech",
+        "runtime": "tts-qwen",
+        "backend": "qwen",
+        "source": {"type": "hf", "repo": repo},
+    }
+    install(client.app, "audio", repo, {"tag": repo, "size_gb": 2.5, "engine_config": qwen})
+    ids = [
+        m["id"]
+        for m in client.get("/api/settings", headers=AUTH).json()["models"]["speech"]["installed"]
+    ]
+    chosen, other = (m for m in ids if "Qwen" in m), (m for m in ids if "kokoro" in m)
+    chosen, other = next(chosen), next(other)
+    client.put("/api/settings/models", headers=AUTH, json={"capability": "speech", "model": chosen})
+    client.put("/api/settings/voice", headers=AUTH, json={"voice": "Ryan"})
+
+    r = client.post("/v1/audio/speech", headers=AUTH, json={"model": "auto", "input": "hi"})
+    assert r.status_code == 200, r.text
+    payload = client.fake.calls[-1][1]
+    assert chosen.split("/")[-1] in payload["model_dir"] and payload["voice"] == "Ryan"
+
+    # Another model doesn't have Ryan: it speaks in its own default rather than failing over.
+    client.post("/v1/audio/speech", headers=AUTH, json={"model": other, "input": "hi"})
+    assert client.fake.calls[-1][1]["voice"] is None
+
+
 def test_media_tools_log_the_model_they_hand_work_to(tmp_path, monkeypatch):
     import asyncio
     from types import SimpleNamespace

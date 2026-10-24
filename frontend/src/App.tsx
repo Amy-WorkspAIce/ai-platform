@@ -162,7 +162,7 @@ export function App() {
             onOpenMemory={() => go("memory")}
             models={byCapability("chat")}
             sttModel={byCapability("transcription")?.[0]?.id}
-            ttsModel={byCapability("speech")?.[0]?.id}
+            ttsModel={byCapability("speech")?.length ? "auto" : undefined}
             onSaved={(id) => {
               setChat((c) => ({ ...c, id }));
               void refreshConversations();

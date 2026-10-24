@@ -20,7 +20,7 @@ All endpoints except `/health` require `Authorization: Bearer <api key>`.
 | POST | `/v1/images/generations` | OpenAI-style image request: `model` (`image/<tag>`), `prompt`, `n`, `size`. Extensions: `negative_prompt`, `steps`, `guidance`, `seed`. Returns `b64_json` images; they are also saved to the gallery. |
 | POST | `/v1/videos/generations` | `{"model": "image/<repo>", "prompt", "negative_prompt"?, "width"?, "height"?, "frames"?, "fps"?, "steps"?, "seed"?}` → `202 {"id"}`. Runs in the background; poll `/api/videos/jobs`. |
 | POST | `/v1/audio/transcriptions` | Multipart upload: `file`, `model` (`audio/whisper-...`), optional `language`, `response_format` (`json`, `text`, `verbose_json`). |
-| POST | `/v1/audio/speech` | `{"model": "audio/kokoro-82m", "input": "...", "voice": "af_heart", "speed": 1.0, "response_format": "wav"}`. Returns audio (`wav`, `flac` or `ogg`). |
+| POST | `/v1/audio/speech` | `{"model": "audio/kokoro-82m", "input": "...", "voice": "af_heart", "speed": 1.0, "response_format": "wav"}`. Returns audio (`wav`, `flac` or `ogg`). `"model": "auto"` uses the speech model chosen on the Voices page; with no `voice`, that model speaks in the voice chosen there (other models use their own default). |
 
 `/v1/models` lists chat models plus installed image/audio models. Each entry has a
 `capability`: `chat`, `image`, `transcription` or `speech`.
