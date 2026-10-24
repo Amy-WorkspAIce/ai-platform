@@ -227,7 +227,8 @@ export class Api {
     });
   deleteVoice = (id: string) =>
     this.request<void>(`/api/voices/${encodeURIComponent(id)}`, { method: "DELETE" });
-  voiceLibrary = () => this.request<{ voices: LibraryVoice[] }>("/api/voices/library");
+  voiceLibrary = () =>
+    this.request<{ voices: LibraryVoice[]; models: VoiceRunner[]; suggested: SuggestedRunner[] }>("/api/voices/library");
   installLibraryVoice = (id: string) =>
     this.request<CustomVoice>("/api/voices/library", { method: "POST", body: JSON.stringify({ id }) });
   async voiceSampleUrl(id: string): Promise<string> {
@@ -700,7 +701,15 @@ export type LibraryVoice = VoiceLabels & {
   credit: string;
   preview: string;
   installed: string | null; // the custom voice id, once installed
+  runs_on: string[]; // installed speech models (ids) that can speak it
 };
+
+/** An installed speech model that can speak library voices: built in (Kyutai 1.6B, some of
+ * them) or by copying the sample (some only once it has a transcript). */
+export type VoiceRunner = { id: string; name: string; how: "built_in" | "copies" | "copies_with_text" };
+
+/** A speech model to install so library voices have something to run on. */
+export type SuggestedRunner = { tag: string; name: string; fit: Fit | null; size_gb: number | null; note: string };
 
 /** A built-in voice's name and labels; ``group`` is the set it belongs to, if the model has sets. */
 export type VoiceDetail = VoiceLabels & { name: string; group?: string };

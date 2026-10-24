@@ -22,7 +22,7 @@ type Props = {
   onOpenSettings: () => void;
 };
 
-const FIT_LABEL: Record<Fit, string> = {
+export const FIT_LABEL: Record<Fit, string> = {
   gpu: "Runs on GPU",
   light: "Runs anywhere",
   partial: "Partial GPU · slower",

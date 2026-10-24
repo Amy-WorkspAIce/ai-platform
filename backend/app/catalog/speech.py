@@ -146,8 +146,11 @@ def runtime_for(model: dict) -> str | None:
 
 def voice_style(model: dict) -> str | None:
     """What voices a supported model offers beyond its built-in ones, for its description."""
-    runtime = runtime_for(model)
-    repo = model["id"].lower()
+    return style_for(runtime_for(model), model["id"], model.get("tags") or [])
+
+
+def style_for(runtime: str | None, repo: str, tags: list[str]) -> str | None:
+    repo = repo.lower()
     if runtime == "tts-qwen":
         if "voicedesign" in repo:
             return "speaks in voices you describe in words"
@@ -166,7 +169,7 @@ def voice_style(model: dict) -> str | None:
         return "can copy a voice from your sample"
     if runtime in ("tts-xtts", "tts-chatterbox", "tts-f5", "tts-kitten", "tts-vieneu"):
         return "can copy a voice from your sample"
-    if runtime == "tts-transformers" and "csm" in (model.get("tags") or []):
+    if runtime == "tts-transformers" and ("csm" in tags or "/csm" in repo):
         return "can copy a voice from your sample"
     return None
 

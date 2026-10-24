@@ -51,7 +51,8 @@ call, and it can act on those apps through their APIs.
   describe one in words: "a calm older man with a deep voice"); and install ready-made ones
   from the **voice library** (hundreds of free-to-use samples). Every model that can copy or
   design voices picks them up. Search, sort and filter voices by language, gender, age, accent,
-  region, style and collection; voices nothing is known about show as "Uncategorized".
+  region, style and collection; voices nothing is known about show as "Uncategorized". Each
+  library voice says which of your models can speak it, and suggests models to install if none can.
 - **Long-term memory**: Amy picks up facts about you as you chat ("🧠 Remembered: …"), even
   when you share them a few messages before asking it to remember, and brings the relevant
   ones into new conversations. It works with reasoning models too. The Memory page lets you search, edit,

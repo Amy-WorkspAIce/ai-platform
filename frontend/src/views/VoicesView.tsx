@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Api, AppSettings, LibraryVoice, ModelVoices, VoiceDetail } from "../api";
+import type { Api, AppSettings, LibraryVoice, ModelVoices, SuggestedRunner, VoiceDetail, VoiceRunner } from "../api";
 import { describeVoice, routeAudio, sampleText } from "../devices";
 import { Icon } from "../icons";
 import { CustomVoices, acceptsText } from "./CustomVoices";
+import { FIT_LABEL } from "./ModelsView";
 import { type Facet, type Sort, VoiceFilterBar, labelFacets, labelLine, useVoiceFilters } from "./VoiceFilters";
 
 const YOURS = "Your voices";
@@ -47,7 +48,7 @@ export function VoicesView({ api, onBrowseModels }: { api: Api; onBrowseModels: 
       ) : (
         <>
           <ModelVoicesCard api={api} settings={settings} version={version} onSettings={setSettings} onBrowseModels={onBrowseModels} />
-          <VoiceLibrary api={api} onInstalled={() => setVersion((v) => v + 1)} />
+          <VoiceLibrary api={api} version={version} onInstalled={() => setVersion((v) => v + 1)} onBrowseModels={onBrowseModels} />
         </>
       )}
     </div>
@@ -233,8 +234,22 @@ function ModelVoicesCard({
   );
 }
 
-function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void }) {
+const NO_MODEL = "No installed model";
+
+function VoiceLibrary({
+  api,
+  version,
+  onInstalled,
+  onBrowseModels,
+}: {
+  api: Api;
+  version: number;
+  onInstalled: () => void;
+  onBrowseModels: () => void;
+}) {
   const [voices, setVoices] = useState<LibraryVoice[] | null>(null);
+  const [runners, setRunners] = useState<VoiceRunner[]>([]);
+  const [suggested, setSuggested] = useState<SuggestedRunner[]>([]);
   const [shown, setShown] = useState(PAGE);
   const [playing, setPlaying] = useState("");
   const [busy, setBusy] = useState("");
@@ -244,15 +259,24 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
   useEffect(() => {
     api
       .voiceLibrary()
-      .then((r) => setVoices(r.voices))
+      .then((r) => {
+        setVoices(r.voices);
+        setRunners(r.models);
+        setSuggested(r.suggested);
+      })
       .catch((e) => setError(errorText(e)));
     return () => audio.current?.pause();
-  }, [api]);
+  }, [api, version]);
+  const runnerName = (id: string) => {
+    const m = runners.find((r) => r.id === id);
+    return m ? m.name + (m.how === "built_in" ? " (built in)" : "") : id;
+  };
 
   const all = voices ?? [];
   const facets: Facet<LibraryVoice>[] = [
     { key: "collection", label: "Collection", values: (v) => [v.collection] },
     ...labelFacets((v: LibraryVoice) => v),
+    { key: "runs-on", label: "Runs on", values: (v) => (v.runs_on.length ? v.runs_on.map(runnerName) : [NO_MODEL]) },
     { key: "license", label: "License", values: (v) => [v.license] },
     { key: "installed", label: "Installed", values: (v) => [v.installed ? "Installed" : "Not installed"] },
   ];
@@ -308,10 +332,35 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
         <p className="muted small">{error ? "" : "Loading the library…"}</p>
       ) : (
         <>
+          {suggested.length > 0 && (
+            <div className="runner-hint small">
+              <p>
+                {runners.length
+                  ? "Some of these voices have no installed model that can speak them. To use them, install one of:"
+                  : "To speak in these voices, install a speech model that can use them, such as:"}
+              </p>
+              <ul>
+                {suggested.map((s) => (
+                  <li key={s.tag}>
+                    <strong>{s.name}</strong>
+                    <span className="muted">
+                      {" "}
+                      · {s.note}
+                      {s.fit ? ` · ${FIT_LABEL[s.fit]}` : ""}
+                      {s.size_gb ? ` · ${s.size_gb} GB` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button className="link small" onClick={onBrowseModels}>
+                Browse models
+              </button>
+            </div>
+          )}
           <VoiceFilterBar state={filters} total={all.length} label="the library" />
           <div className="voice-grid">
             {matching.slice(0, shown).map((v) => (
-              <div key={v.id} className={`voice ${v.installed ? "selected" : ""}`}>
+              <div key={v.id} className={`voice library-voice ${v.installed ? "selected" : ""}`}>
                 <button className="icon-button" title={`Hear ${v.name}`} onClick={() => play(v)}>
                   {playing === v.id ? <Icon name="stop" size={14} label="Stop" /> : <Icon name="volume" size={14} label={`Hear ${v.name}`} />}
                 </button>
@@ -326,6 +375,9 @@ function VoiceLibrary({ api, onInstalled }: { api: Api; onInstalled: () => void 
                     {busy === v.id ? "Installing…" : "Install"}
                   </button>
                 )}
+                <span className={`small runs-on ${v.runs_on.length ? "" : "none"}`}>
+                  {v.runs_on.length ? `Runs on ${v.runs_on.map(runnerName).join(", ")}` : NO_MODEL}
+                </span>
               </div>
             ))}
           </div>

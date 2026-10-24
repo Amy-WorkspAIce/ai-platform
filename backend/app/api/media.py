@@ -20,7 +20,10 @@ from pydantic import BaseModel, Field
 
 from app import studio, voice_meta
 from app import voice_library as library
+from app import voice_runners as runners
 from app import voices as custom
+from app.api.models import _annotated, _standard_live
+from app.catalog import _row_sort_key, flatten
 from app.delegation import choose
 from app.engines.speech_base import STARTERS
 from app.security import require_api_key
@@ -391,14 +394,34 @@ async def voice_library(request: Request) -> dict:
         found = await library.listing(request.app.state.http, _hf_token(request))
     except httpx.HTTPError as exc:
         raise HTTPException(502, f"Couldn't reach Hugging Face: {exc}") from exc
-    installed = {
-        v["source"]: custom.PREFIX + v["id"]
-        for v in request.app.state.db.list_voices()
-        if v.get("source")
-    }
-    return {
-        "voices": [e | {"installed": installed.get(f"{library.REPO}:{e['id']}")} for e in found]
-    }
+    stored = {v["source"]: v for v in request.app.state.db.list_voices() if v.get("source")}
+    models = runners.installed(request.app)
+    can_transcribe = bool(choose(request.app, "transcription"))
+    voices = []
+    for e in found:
+        voice = stored.get(f"{library.REPO}:{e['id']}")
+        transcript = bool(voice["transcript"]) if voice else can_transcribe
+        voices.append(
+            e
+            | {
+                "installed": custom.PREFIX + voice["id"] if voice else None,
+                "runs_on": runners.runs_on(e["id"], models, transcript),
+            }
+        )
+    # Something to install for the voices no installed model can speak yet.
+    suggested = await _suggested_runners(request) if any(not v["runs_on"] for v in voices) else []
+    return {"voices": voices, "models": models, "suggested": suggested}
+
+
+async def _suggested_runners(request: Request) -> list[dict]:
+    try:
+        families = await _annotated(request, await _standard_live(request.app.state.live_catalog))
+    except httpx.HTTPError:
+        return []
+    runtime = {f["id"]: f.get("runtime") for f in families}
+    rows = [r | {"runtime": runtime.get(r["family_id"])} for r in flatten(families)]
+    rows = [r for r in rows if "speech" in r["use_cases"]]
+    return runners.suggested(sorted(rows, key=_row_sort_key("perfect")))
 
 
 class LibraryVoice(BaseModel):

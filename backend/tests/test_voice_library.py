@@ -53,8 +53,14 @@ def fake_library(monkeypatch):
     async def download(http, token, path):
         return wav(6)
 
+    async def no_suggestions(request):
+        return []
+
+    from app.api import media
+
     monkeypatch.setattr(library, "listing", listing)
     monkeypatch.setattr(library, "download", download)
+    monkeypatch.setattr(media, "_suggested_runners", no_suggestions)  # no catalog fetch
 
 
 def test_install_a_library_voice(client, fake_library):  # noqa: F811
@@ -178,3 +184,48 @@ def test_https_server_only_with_a_certificate(tmp_path, monkeypatch):
     assert secure.lifespan == "off" and plain.app is secure.app
     monkeypatch.setenv("AMY_HTTPS_PORT", "0")
     assert len(serve.configs()) == 1
+
+
+def test_library_says_which_models_speak_each_voice(client, fake_library, monkeypatch):  # noqa: F811
+    from app import voice_runners
+    from app.api import media
+
+    async def suggestions(request):
+        return [{"tag": "ResembleAI/chatterbox", "name": "chatterbox"}]
+
+    monkeypatch.setattr(media, "_suggested_runners", suggestions)
+    listing = client.get("/api/voices/library", headers=AUTH).json()
+    assert listing["models"] == [] and listing["suggested"][0]["name"] == "chatterbox"
+    assert all(v["runs_on"] == [] for v in listing["voices"])
+
+    for repo, runtime in (
+        ("kyutai/tts-1.6b-en_fr", "tts-kyutai"),  # VCTK and Alba voices built in
+        ("Qwen/Qwen3-TTS-12Hz-0.6B-Base", "tts-qwen"),  # copies any sample
+        ("SWivid/F5-TTS", "tts-f5"),  # copies, but needs the sample's words
+        ("Supertone/supertonic-3", "tts-supertonic"),  # its own voices only
+    ):
+        cfg = {"task": "speech", "runtime": runtime, "backend": runtime.removeprefix("tts-")}
+        install(client.app, "audio", repo, {"tag": repo, "size_gb": 1, "engine_config": cfg})
+    listing = client.get("/api/voices/library", headers=AUTH).json()
+    how = {m["id"]: m["how"] for m in listing["models"]}
+    assert how == {
+        "audio/kyutai/tts-1.6b-en_fr": "built_in",
+        "audio/Qwen/Qwen3-TTS-12Hz-0.6B-Base": "copies",
+        "audio/SWivid/F5-TTS": "copies_with_text",
+    }
+    runs = {v["id"]: set(v["runs_on"]) for v in listing["voices"]}
+    # No speech-to-text model to write down the words, so F5 can't take them yet.
+    assert runs["vctk/p225_023_enhanced.wav"] == {
+        "audio/kyutai/tts-1.6b-en_fr",
+        "audio/Qwen/Qwen3-TTS-12Hz-0.6B-Base",
+    }
+    assert runs["voice-zero/caro_davy.wav"] == {"audio/Qwen/Qwen3-TTS-12Hz-0.6B-Base"}
+    assert listing["suggested"] == []  # every voice has a model
+
+    rows = [
+        {"tag": "kokoro-82m", "name": "Kokoro", "runtime": None},
+        {"tag": "ResembleAI/chatterbox", "name": "chatterbox", "runtime": "tts-chatterbox"},
+        {"tag": "x/gated", "name": "g", "runtime": "tts-xtts", "requires_token": True},
+        {"tag": "kyutai/tts-1.6b-en_fr", "name": "tts-1.6b", "runtime": "tts-kyutai"},
+    ]
+    assert [s["name"] for s in voice_runners.suggested(rows)] == ["chatterbox", "tts-1.6b"]

@@ -71,7 +71,7 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | POST | `/api/voices/from-speech` | `{"name", "model", "voice", "text"?}`: speak a sentence with an installed model's built-in voice and keep it as a sample (for models that only copy voices, such as Qwen3-TTS Base). |
 | PATCH/DELETE | `/api/voices/{id}` | Rename, change the description or transcript (`""` clears it), or delete. Deleting the default voice resets the default. |
 | GET | `/api/voices/{id}/sample` | A clone's WAV sample. |
-| GET | `/api/voices/library` | The voice library: ready-made samples (`id`, `name`, `collection`, `language`, `license`, `credit`, `preview` URL, the same labels as voice `details`, and `installed`: the custom voice id once installed). |
+| GET | `/api/voices/library` | The voice library: `voices`, ready-made samples (`id`, `name`, `collection`, `language`, `license`, `credit`, `preview` URL, the same labels as voice `details`, `installed`: the custom voice id once installed, and `runs_on`: the installed speech models that can speak it); `models`, the installed models that can speak library voices (`how`: `built_in`, `copies` or `copies_with_text`); and, when some voice has none, `suggested`: models to install, best for this machine first. |
 | POST | `/api/voices/library` | `{"id"}`: install a library sample as a custom voice (a clone, transcribed if a speech-to-text model is installed; its `credit` is kept). |
 | GET | `/api/videos/jobs` | Video jobs with live progress (`phase`, `step`, `steps`, `status`, `error`). |
 | GET | `/api/videos` | Video gallery. |

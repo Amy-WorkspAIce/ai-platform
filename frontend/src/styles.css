@@ -573,3 +573,9 @@ details.rule summary { cursor: pointer; }
   .facet { grid-template-columns: 1fr; gap: 0.25rem; }
   .facet-label { padding-top: 0; }
 }
+.runner-hint { border: 1px solid var(--border); border-left: 3px solid var(--cyan); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; margin: 0.4rem 0; }
+.runner-hint p { margin: 0 0 0.3rem; }
+.runner-hint ul { margin: 0 0 0.3rem; padding-left: 1.1rem; }
+.library-voice { flex-wrap: wrap; }
+.runs-on { color: var(--cyan); flex-basis: 100%; padding-left: 2rem; }
+.runs-on.none { color: var(--muted); font-style: italic; }

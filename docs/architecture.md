@@ -229,6 +229,11 @@ Library entries, Kyutai's built-in voices, the starter voices and custom voices 
 the library all carry these labels; the Voices page turns them into filters, and whatever a
 voice lacks shows as "Uncategorized".
 
+`app/voice_runners.py` says which installed speech models can speak each library voice: any
+model that copies voices (those needing a transcript only when the voice has one, or a
+speech-to-text model could write it down), and Kyutai TTS 1.6B for the VCTK and Alba voices it
+has built in. When a voice has none, the library suggests catalog models that would.
+
 Pipelines are placed on the GPU in the cheapest way that fits: fully on GPU; per-component
 CPU offload; **mixed**: components that fit stay on the GPU and oversized ones (e.g. a 22 GB
 video text encoder) are streamed from RAM layer by layer (diffusers group offloading); or
