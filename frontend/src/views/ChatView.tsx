@@ -1,3 +1,4 @@
+import { statusOf } from "./chatStatus";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -109,6 +110,11 @@ function parseArgs(raw: string): Record<string, unknown> | string {
 function summaryOf(name: string, args: Record<string, unknown> | string): string {
   const key = SUMMARY_ARG[name];
   return typeof args === "object" && key && args[key] != null ? String(args[key]) : "";
+}
+
+/** The chat's items in the shape the status line reads. */
+function forStatus(items: Item[]) {
+  return items.map((i) => (i.kind === "assistant" ? { kind: i.kind, hasAnswer: !!splitThinking(i.content).answer } : i));
 }
 
 /** Rebuild display items (including tool cards) from saved messages. */
@@ -591,6 +597,7 @@ export function ChatView({
   // Which turn each item belongs to, so "Thought process" opens the right one.
   let turnIndex = -1;
   const turnOf = items.map((item) => (item.kind === "user" ? ++turnIndex : turnIndex));
+  const status = busy ? statusOf(forStatus(items), details?.subagents ?? []) : null;
 
   return (
     <div className="chat-area">
@@ -678,7 +685,24 @@ export function ChatView({
                 <ToolCard key={item.id} api={api} item={item} onDecide={decide} />
               ),
             )}
-            {busy && items[lastIndex]?.kind === "user" && <span className="typing">●●●</span>}
+            {status && (
+              <div className="chat-status" role="status">
+                <span className="chat-status-dot" aria-hidden="true" />
+                {status.opens ? (
+                  <button
+                    type="button"
+                    className="link chat-status-text"
+                    onClick={() => (status.opens === "thinking" ? showDetails("thinking", turnIndex) : showDetails("subagents"))}
+                    title="See this in Details"
+                  >
+                    {status.text}…
+                  </button>
+                ) : (
+                  <span className="chat-status-text">{status.text}…</span>
+                )}
+                {status.detail && <code className="chat-status-detail">{status.detail}</code>}
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
             <div ref={bottom} />
           </div>
@@ -745,12 +769,11 @@ function AssistantMessage({
 }) {
   const thinking = thinkingOf(content, reasoning);
   const answer = splitThinking(content).answer;
-  const stillThinking = streaming && !answer;
 
   // The thinking itself lives in the Details panel; the reply only links to it.
   const link = thinking && (
-    <button type="button" className={`link thinking-link ${stillThinking ? "typing" : ""}`} onClick={onShowThinking} title="Read the thought process in Details">
-      {stillThinking ? "Thinking…" : "Thought process"}
+    <button type="button" className="link thinking-link" onClick={onShowThinking} title="Read the thought process in Details">
+      Thought process
     </button>
   );
   // A step that only thought (before using a tool) is just the link, not an empty reply.
@@ -759,12 +782,10 @@ function AssistantMessage({
   return (
     <div className="msg assistant">
       {link}
-      {answer ? (
+      {answer && (
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
         </div>
-      ) : (
-        streaming && !thinking && <span className="typing">●●●</span>
       )}
       {answer && !streaming && ttsModel && (
         <div className="msg-actions">
