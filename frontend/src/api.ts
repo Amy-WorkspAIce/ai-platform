@@ -98,6 +98,13 @@ export class Api {
     this.request<Folder>(`/api/folders/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
   deleteFolder = (id: string) => this.request<void>(`/api/folders/${id}`, { method: "DELETE" });
 
+  // ---- connected apps ----
+  connectors = () => this.request<Connector[]>("/api/connectors");
+  putConnector = (id: string, body: { name?: string; url?: string; api_key?: string; enabled?: boolean }) =>
+    this.request<Connector>(`/api/connectors/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  testConnector = (id: string) => this.request<Connector>(`/api/connectors/${id}/test`, { method: "POST" });
+  deleteConnector = (id: string) => this.request<void>(`/api/connectors/${id}`, { method: "DELETE" });
+
   // ---- rules ----
   rules = (scope: string) => this.request<RuleListing>(`/api/rules?scope=${encodeURIComponent(scope)}`);
   addRule = (rule: Pick<Rule, "name" | "text" | "scope" | "applies">) =>
@@ -475,6 +482,19 @@ export type ModelInfo = {
 };
 
 export type RuleApplies = "always" | "chat" | "agent";
+
+/** An app (MCP server) whose tools chat can use. "changes": the tool asks before it runs. */
+export type Connector = {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  source: "user" | "hub";
+  has_key: boolean;
+  server?: string;
+  error?: string | null;
+  tools?: { name: string; description: string; changes: boolean }[];
+};
 
 export type Rule = {
   id: string;

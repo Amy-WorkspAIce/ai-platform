@@ -638,3 +638,13 @@ details.rule summary { cursor: pointer; }
   }
   .details-scrim { display: block; position: fixed; inset: 0; background: rgb(0 0 0 / 0.4); z-index: 25; }
 }
+
+/* Settings: connected apps */
+.connectors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.connector { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.connector-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.connector-actions { margin-left: auto; display: flex; gap: 0.75rem; }
+.connector-url { overflow-wrap: anywhere; }
+.connector-tools { margin: 0.25rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.2rem; }
+.connector-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.tag.warn { color: var(--error); }

@@ -46,6 +46,9 @@ Planned: `/v1/embeddings`, `/v1/completions`, tool calling with connector tools.
 | GET/POST | `/api/conversations` | List (most recent first) or create (`{"title", "model", "folder_id"?}`) saved chats. |
 | GET/PATCH/DELETE | `/api/conversations/{id}` | Fetch with messages; PATCH `{"title"?, "folder_id"?}` renames or moves (`"folder_id": ""` removes it from its folder); delete. |
 | GET | `/api/conversations/{id}/details` | The chat's Details panel: `memories` (what memory did in it, oldest first: `{id, action, text, memory_id, created_at, exists}`, `action` one of `remembered`, `updated`, `removed`, `failed`, `recalled`; `exists` is false once the fact is forgotten) and `subagents` (other models it handed work to: `{id, kind, model, task, status, result, started_at, finished_at}`, `kind` one of `ask`, `image`, `video`, `speech`; `status` one of `running`, `done`, `failed`, `stopped`). Agent chat streams the same rows live as `subagent` events. |
+| GET | `/api/connectors` | Connected apps (MCP servers) whose tools chat uses: `{id, name, url, enabled, source, has_key, server?, error?, tools?}`; `tools` is `[{name, description, changes}]` from the last check (`changes`: the tool may change things, so chat asks first). Keys are never returned. |
+| PUT/DELETE | `/api/connectors/{id}` | Add or change a connector: `{"name"?, "url"?, "api_key"?, "enabled"?, "source"?: "user"|"hub"}` (`id`: lowercase letters, digits, dashes; a new one needs `url`, the MCP endpoint; `"api_key": ""` removes the key). The hub registers each app it installs that serves MCP. Chat offers the tools of enabled connectors as `<id>_<tool>`. |
+| POST | `/api/connectors/{id}/test` | Ask the app for its tools now. |
 | GET/POST | `/api/folders` | List chat folders or create one (`{"name"}`). |
 | PATCH/DELETE | `/api/folders/{id}` | `{"name"?, "collapsed"?, "position"?}`; deleting a folder keeps its chats (they become unfiled). |
 | GET | `/api/memory?q=` | Remembered facts plus `enabled`, `auto`, `embedding_model`, `categories`. With `q`, ranked by relevance (by meaning when an embedding model is installed). |
@@ -99,4 +102,4 @@ token. On some GPUs, the first run compiles CUDA kernels, which can take minutes
 it during install means users don't wait on their first message. The status shows
 "Optimizing for your GPU (first run only)" while this happens.
 
-Planned: provider CRUD, API key management, connectors.
+Planned: provider CRUD, API key management.

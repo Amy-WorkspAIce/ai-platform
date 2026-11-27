@@ -1,4 +1,4 @@
-import { statusOf } from "./chatStatus";
+import { appTool, statusOf } from "./chatStatus";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -91,6 +91,11 @@ const TOOL_LABEL: Record<string, string> = {
   recall_memory: "Looked in memory",
 };
 
+/** A tool's label: ours from the list above; an app's ("docs_append_text") as "Docs: append text". */
+function toolLabel(name: string): string {
+  return TOOL_LABEL[name] ?? appTool(name);
+}
+
 // Images the user attached are referenced in their message so the model can edit them.
 const ATTACHED = /\[Attached image: image_id=([a-f0-9]+)(?: \(([^)]*)\))?\]/g;
 
@@ -165,7 +170,7 @@ function turnsFrom(items: Item[]): Turn[] {
       if (text) turn.steps.push({ kind: "thought", text });
     } else if (item.kind === "tool") {
       const ok = item.status === "ok" ? true : item.status === "error" ? false : null;
-      turn.steps.push({ kind: "tool", label: TOOL_LABEL[item.name] ?? item.name, summary: item.summary, ok });
+      turn.steps.push({ kind: "tool", label: toolLabel(item.name), summary: item.summary, ok });
     }
   }
   return turns;
@@ -837,7 +842,7 @@ function ToolCard({
       <details open={awaiting}>
         <summary>
           <span className={`tool-status ${item.status}`} aria-label={item.status} />
-          <span className="tool-label">{TOOL_LABEL[item.name] ?? item.name}</span>
+          <span className="tool-label">{toolLabel(item.name)}</span>
           {item.summary && <code className="tool-summary">{item.summary}</code>}
           {awaiting && <span className="tool-waiting">needs approval</span>}
           {media && item.status === "running" && <span className="tool-waiting muted">working…</span>}

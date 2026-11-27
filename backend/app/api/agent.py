@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import context, memory, routing
+from app import connectors, context, memory, routing
 from app import rules as rulesets
 from app.agent import ModelError, history_with_ids, run_agent
 from app.db import Database
@@ -142,6 +142,7 @@ def system_prompt(
     memories: str | None = None,
     memory_on: bool = False,
     rules: str | None = None,
+    apps: str | None = None,
 ) -> str:
     parts = [BASE_PROMPT.format(today=f"{date.today():%A, %B %d, %Y}")]
     if req.mode == "agent" and ws is not None:
@@ -153,6 +154,8 @@ def system_prompt(
     parts.append(WEB_PROMPT if web else NO_WEB_PROMPT)
     if creative:
         parts.append(creative)
+    if apps:
+        parts.append(apps)
     if rules:
         parts.append(rules)
     if memory_on:
@@ -200,6 +203,11 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
     media_tools = creative_tools(request.app)
     for tool in media_tools:
         toolset.add(track_media(request.app, tool, tracker))
+
+    # Connected apps (Docs, Sheets...): their tools, and a note on what each is for.
+    app_tools, apps = await state.connectors.for_chat()
+    for tool in app_tools:
+        toolset.add(tool)
 
     settings = {"mode": req.mode, "web": web, "workspace": req.workspace, "purpose": purpose}
     summary: str | None = None
@@ -252,6 +260,7 @@ async def agent_chat(request: Request, req: AgentChatRequest) -> StreamingRespon
         memories or None,
         memory_on=us.memory_enabled and us.memory_auto,
         rules=rulesets.prompt(rules, project),
+        apps=connectors.prompt(apps),
     )
     # What the user said earlier in this chat, so "remember that" can refer back to it.
     earlier = [m["content"] for m in history if m.get("role") == "user" and m.get("content")]

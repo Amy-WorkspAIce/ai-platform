@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS subagents (
 );
 CREATE INDEX IF NOT EXISTS subagents_by_conversation ON subagents(conversation_id, started_at);
 -- Rules from a wider scope turned off in a narrower one (a global rule off in one folder).
+-- Apps (MCP servers) whose tools chat can use (app.connectors).
+CREATE TABLE IF NOT EXISTS connectors (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    api_key TEXT,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    source TEXT NOT NULL DEFAULT 'user',
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS rule_exclusions (
     scope TEXT NOT NULL,
     rule_id TEXT NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
@@ -598,6 +608,47 @@ class Database:
         with self.connect() as db:
             return db.execute("DELETE FROM memories WHERE user_id = ?", (user_id,)).rowcount
 
+    # ---- connectors ----
+
+    def list_connectors(self) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM connectors ORDER BY created_at").fetchall()
+        return [_connector(r) for r in rows]
+
+    def get_connector(self, connector_id: str) -> dict | None:
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM connectors WHERE id = ?", (connector_id,)).fetchone()
+        return _connector(row) if row else None
+
+    def put_connector(self, connector_id: str, **fields) -> dict:
+        """Add a connector, or change the given fields of an existing one."""
+        allowed = {"name", "url", "api_key", "enabled", "source"}
+        fields = {k: v for k, v in fields.items() if k in allowed}
+        if "enabled" in fields:
+            fields["enabled"] = int(bool(fields["enabled"]))
+        with self.connect() as db:
+            exists = db.execute("SELECT 1 FROM connectors WHERE id = ?", (connector_id,)).fetchone()
+            if exists:
+                if fields:
+                    # Column names come from the fixed list above.
+                    sets = ", ".join(f"{k} = ?" for k in fields)
+                    sql = f"UPDATE connectors SET {sets} WHERE id = ?"  # noqa: S608
+                    db.execute(sql, (*fields.values(), connector_id))
+            else:
+                row = {"name": connector_id, "url": "", "api_key": None, "enabled": 1,
+                       "source": "user"} | fields  # fmt: skip
+                db.execute(
+                    "INSERT INTO connectors (id, name, url, api_key, enabled, source, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (connector_id, row["name"], row["url"], row["api_key"], row["enabled"],
+                     row["source"], time.time()),
+                )  # fmt: skip
+        return self.get_connector(connector_id)  # type: ignore[return-value]
+
+    def delete_connector(self, connector_id: str) -> bool:
+        with self.connect() as db:
+            return db.execute("DELETE FROM connectors WHERE id = ?", (connector_id,)).rowcount > 0
+
     # ---- rules ----
 
     def list_rules(self, scopes: list[str] | None = None) -> list[dict]:
@@ -678,6 +729,11 @@ class Database:
                     "DELETE FROM rule_exclusions WHERE scope = ? AND rule_id = ?",
                     (scope, rule_id),
                 )
+
+
+def _connector(row) -> dict:
+    d = dict(row)
+    return d | {"enabled": bool(d["enabled"])}
 
 
 def _rule(row) -> dict:

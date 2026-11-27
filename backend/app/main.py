@@ -13,10 +13,21 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__, hardware
 from app.agent import RunRegistry
-from app.api import agent, conversations, media, memory, models, openai, rules, system
+from app.api import (
+    agent,
+    connectors,
+    conversations,
+    media,
+    memory,
+    models,
+    openai,
+    rules,
+    system,
+)
 from app.api import settings as settings_api
 from app.catalog.live import LiveCatalog
 from app.config import Settings, get_settings
+from app.connectors import Connectors
 from app.db import Database
 from app.engines import EngineManager
 from app.jobs import JobRegistry
@@ -69,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.user_settings = UserSettings(settings.data_dir, settings.hf_token)
     app.state.agent_runs = RunRegistry()
     app.state.db = Database(settings.data_dir / "amy.db")
+    app.state.connectors = Connectors(app.state)
     app.state.engines = EngineManager(
         settings.data_dir,
         app.state.jobs,
@@ -96,6 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(memory.router)
     app.include_router(agent.router)
     app.include_router(rules.router)
+    app.include_router(connectors.router)
     app.include_router(settings_api.router)
     app.include_router(media.api)
     app.include_router(media.v1)

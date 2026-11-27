@@ -29,6 +29,12 @@ const DOING: Record<string, string> = {
 // Their summary is a long prompt, which says little in a one-line status.
 const NO_DETAIL = new Set(["generate_image", "edit_image", "generate_video", "speak", "ask_models"]);
 
+/** "docs_append_text" -> "Docs: append text". */
+export const appTool = (name: string) => {
+  const [app, ...rest] = name.split("_");
+  return rest.length ? `${app.charAt(0).toUpperCase()}${app.slice(1)}: ${rest.join(" ")}` : name;
+};
+
 const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
 export function statusOf(items: StatusItem[], agents: StatusAgent[]): ChatStatus {
@@ -46,7 +52,7 @@ export function statusOf(items: StatusItem[], agents: StatusAgent[]): ChatStatus
   if (running.length > 1) return { text: `Running ${running.length} tools` };
   if (running.length === 1) {
     const { name, summary } = running[0];
-    return { text: DOING[name] ?? `Using ${name}`, detail: NO_DETAIL.has(name) ? undefined : oneLine(summary) || undefined };
+    return { text: DOING[name] ?? `Using ${appTool(name)}`, detail: NO_DETAIL.has(name) ? undefined : oneLine(summary) || undefined };
   }
 
   const last = [...items].reverse().find((i) => i.kind !== "notice");

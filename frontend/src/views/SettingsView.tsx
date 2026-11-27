@@ -1,3 +1,4 @@
+import { ConnectedApps } from "./ConnectedApps";
 import { useEffect, useState } from "react";
 import { Api, getPref, setPref, type AppSettings } from "../api";
 import { MIC_PREF, SPEAKER_PREF, canChooseSpeaker, useAudioDevices, useDevicePref } from "../devices";
@@ -47,6 +48,8 @@ export function SettingsView({ api, onChanged, onSignOut, onOpenVoices }: Props)
       />
 
       <Devices onOpenVoices={onOpenVoices} />
+
+      <ConnectedApps api={api} />
 
       <section className="card setting">
         <div className="setting-head">
